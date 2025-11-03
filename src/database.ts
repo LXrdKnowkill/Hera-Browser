@@ -1,19 +1,16 @@
+// External dependencies
 import path from 'path';
 import { app } from 'electron';
+
+// Types
+import type { HistoryEntry, Bookmark, BookmarkFolder, TabState } from './types';
+import { validateBookmarks, validateHistoryEntries } from './types/guards';
 
 // Importação dinâmica do sqlite3 para evitar problemas com webpack
 // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-explicit-any
 const sqlite3 = require('sqlite3') as any;
 
 let db: any = null;
-
-export interface HistoryEntry {
-  id?: number;
-  url: string;
-  title: string;
-  timestamp: number;
-  visit_count?: number;
-}
 
 /**
  * Inicializa o banco de dados SQLite
@@ -155,7 +152,7 @@ export const addHistoryEntry = (url: string, title: string): Promise<void> => {
     db.get(
       'SELECT id, visit_count FROM history WHERE url = ?',
       [url],
-      (err: Error | null, row: any) => {
+      (err: Error | null, row: { id: number; visit_count: number } | undefined) => {
         if (err) {
           console.error('Erro ao verificar histórico:', err);
           resolve(); // Não bloqueia se houver erro
@@ -205,13 +202,14 @@ export const getHistory = (limit: number = 1000): Promise<HistoryEntry[]> => {
     db.all(
       'SELECT * FROM history ORDER BY timestamp DESC LIMIT ?',
       [limit],
-      (err: Error | null, rows: any[]) => {
+      (err: Error | null, rows: unknown[]) => {
         if (err) {
           console.error('Erro ao buscar histórico:', err);
           reject(err);
           return;
         }
-        resolve(rows);
+        const validatedHistory = validateHistoryEntries(rows);
+        resolve(validatedHistory);
       }
     );
   });
@@ -249,7 +247,7 @@ export const getSetting = (key: string): Promise<string | null> => {
       return;
     }
 
-    db.get('SELECT value FROM settings WHERE key = ?', [key], (err: Error | null, row: any) => {
+    db.get('SELECT value FROM settings WHERE key = ?', [key], (err: Error | null, row: { value: string } | undefined) => {
       if (err) {
         console.error('Erro ao buscar configuração:', err);
         reject(err);
@@ -295,7 +293,7 @@ export const getAllSettings = (): Promise<Record<string, string>> => {
       return;
     }
 
-    db.all('SELECT key, value FROM settings', [], (err: Error | null, rows: any[]) => {
+    db.all('SELECT key, value FROM settings', [], (err: Error | null, rows: { key: string; value: string }[]) => {
       if (err) {
         console.error('Erro ao buscar configurações:', err);
         reject(err);
@@ -310,15 +308,6 @@ export const getAllSettings = (): Promise<Record<string, string>> => {
     });
   });
 };
-
-export interface TabState {
-  id: string;
-  url: string;
-  title: string;
-  favicon?: string;
-  position: number;
-  active: boolean;
-}
 
 /**
  * Salva o estado das abas abertas
@@ -383,7 +372,7 @@ export const loadOpenTabs = (): Promise<TabState[]> => {
     db.all(
       'SELECT * FROM open_tabs ORDER BY position ASC',
       [],
-      (err: Error | null, rows: any[]) => {
+      (err: Error | null, rows: { id: string; url: string; title: string; favicon: string | null; position: number; active: number }[]) => {
         if (err) {
           console.error('Erro ao carregar abas salvas:', err);
           reject(err);
@@ -425,25 +414,6 @@ export const clearOpenTabs = (): Promise<void> => {
     });
   });
 };
-
-export interface Bookmark {
-  id: string;
-  url?: string;
-  title: string;
-  favicon?: string;
-  folder_id?: string;
-  position: number;
-  created_at: number;
-  updated_at: number;
-}
-
-export interface BookmarkFolder {
-  id: string;
-  name: string;
-  parent_id?: string;
-  position: number;
-  created_at: number;
-}
 
 /**
  * Adiciona um favorito
@@ -508,14 +478,14 @@ export const getBookmarks = (folderId?: string): Promise<Bookmark[]> => {
       ? 'SELECT * FROM bookmarks WHERE folder_id = ? ORDER BY position ASC, created_at DESC'
       : 'SELECT * FROM bookmarks WHERE folder_id IS NULL ORDER BY position ASC, created_at DESC';
     
-    db.all(query, folderId ? [folderId] : [], (err: Error | null, rows: any[]) => {
+    db.all(query, folderId ? [folderId] : [], (err: Error | null, rows: unknown[]) => {
       if (err) {
         console.error('Erro ao buscar favoritos:', err);
         reject(err);
         return;
       }
 
-      const bookmarks: Bookmark[] = rows.map((row) => ({
+      const bookmarks: Bookmark[] = rows.map((row: any) => ({
         id: row.id,
         url: row.url,
         title: row.title,
@@ -526,7 +496,8 @@ export const getBookmarks = (folderId?: string): Promise<Bookmark[]> => {
         updated_at: row.updated_at,
       }));
 
-      resolve(bookmarks);
+      const validatedBookmarks = validateBookmarks(bookmarks);
+      resolve(validatedBookmarks);
     });
   });
 };
@@ -545,14 +516,14 @@ export const searchBookmarks = (query: string): Promise<Bookmark[]> => {
     db.all(
       'SELECT * FROM bookmarks WHERE title LIKE ? OR url LIKE ? ORDER BY updated_at DESC',
       [searchTerm, searchTerm],
-      (err: Error | null, rows: any[]) => {
+      (err: Error | null, rows: unknown[]) => {
         if (err) {
           console.error('Erro ao buscar favoritos:', err);
           reject(err);
           return;
         }
 
-        const bookmarks: Bookmark[] = rows.map((row) => ({
+        const bookmarks: Bookmark[] = rows.map((row: any) => ({
           id: row.id,
           url: row.url,
           title: row.title,
@@ -563,7 +534,8 @@ export const searchBookmarks = (query: string): Promise<Bookmark[]> => {
           updated_at: row.updated_at,
         }));
 
-        resolve(bookmarks);
+        const validatedBookmarks = validateBookmarks(bookmarks);
+        resolve(validatedBookmarks);
       }
     );
   });
@@ -611,7 +583,7 @@ export const getBookmarkFolders = (parentId?: string): Promise<BookmarkFolder[]>
       ? 'SELECT * FROM bookmark_folders WHERE parent_id = ? ORDER BY position ASC, name ASC'
       : 'SELECT * FROM bookmark_folders WHERE parent_id IS NULL ORDER BY position ASC, name ASC';
     
-    db.all(query, parentId ? [parentId] : [], (err: Error | null, rows: any[]) => {
+    db.all(query, parentId ? [parentId] : [], (err: Error | null, rows: { id: string; name: string; parent_id: string | null; position: number; created_at: number }[]) => {
       if (err) {
         console.error('Erro ao buscar pastas de favoritos:', err);
         reject(err);

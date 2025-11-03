@@ -11,9 +11,17 @@
     "outDir": "dist",
     "moduleResolution": "node",
     "resolveJsonModule": true,
+    "strict": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "paths": {
-      "*": ["node_modules/*"]
+      "*": ["node_modules/*"],
+      "@types/*": ["./src/types/*"]
     }
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules"]
 }

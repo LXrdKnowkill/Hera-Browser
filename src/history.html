@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Histórico - Hera Browser</title>
+  <link rel="stylesheet" href="history.css">
+</head>
+<body>
+  <div class="history-container">
+    <header class="history-header">
+      <div class="header-content">
+        <img src="HeraBrowser256x256.png" alt="Hera Browser" class="logo">
+        <h1>Histórico de Navegação</h1>
+      </div>
+      <div class="header-actions">
+        <input type="text" id="search-input" placeholder="Buscar no histórico..." class="search-input">
+        <button id="clear-all-btn" class="btn-danger">Limpar Tudo</button>
+      </div>
+    </header>
+
+    <main class="history-main">
+      <div id="history-list" class="history-list">
+        <!-- Items serão inseridos aqui via JavaScript -->
+      </div>
+      
+      <div id="empty-state" class="empty-state hidden">
+        <svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <h2>Nenhum histórico</h2>
+        <p>Seu histórico de navegação aparecerá aqui</p>
+      </div>
+
+      <div id="no-results" class="empty-state hidden">
+        <svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="11" cy="11" r="8"/>
+          <path d="m21 21-4.35-4.35"/>
+        </svg>
+        <h2>Nenhum resultado encontrado</h2>
+        <p>Tente buscar com outros termos</p>
+      </div>
+    </main>
+  </div>
+
+  <script src="history.js"></script>
+</body>
+</html>

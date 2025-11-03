@@ -1,8 +1,32 @@
-import { app, BrowserWindow, BrowserView, ipcMain, shell, session, protocol } from 'electron'; 
+// External dependencies
+import { app, BrowserWindow, BrowserView, ipcMain, shell, session, protocol } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-import { initDatabase, addHistoryEntry, getHistory, clearHistory, closeDatabase, getSetting, setSetting, getAllSettings, saveOpenTabs, loadOpenTabs, TabState, addBookmark, removeBookmark, getBookmarks, searchBookmarks, createBookmarkFolder, getBookmarkFolders, Bookmark } from './database';
+
+// Internal modules
+import {
+  initDatabase,
+  addHistoryEntry,
+  getHistory,
+  clearHistory,
+  closeDatabase,
+  getSetting,
+  setSetting,
+  getAllSettings,
+  saveOpenTabs,
+  loadOpenTabs,
+  addBookmark,
+  removeBookmark,
+  getBookmarks,
+  searchBookmarks,
+  createBookmarkFolder,
+  getBookmarkFolders
+} from './database';
+
+// Types
+import type { Bookmark, BookmarkFolder, HistoryEntry, TabState } from './types';
+import { validateBookmarks, validateHistoryEntries } from './types/guards';
 
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
@@ -78,7 +102,9 @@ const createNewTab = (url: string | undefined = undefined) => {
   
   if (finalUrl.startsWith('hera://')) {
     initialTitle = finalUrl.includes('settings') ? 'Configurações' : 
-                   finalUrl.includes('new-tab') ? 'Nova Aba' : 'Hera Browser';
+                   finalUrl.includes('new-tab') ? 'Nova Aba' :
+                   finalUrl.includes('history') ? 'Histórico' :
+                   finalUrl.includes('downloads') ? 'Downloads' : 'Hera Browser';
     // Usa o protocolo hera:// para servir o ícone
     initialFavicon = 'hera://HeraBrowser256x256.png';
   }
@@ -156,7 +182,7 @@ const createNewTab = (url: string | undefined = undefined) => {
       } catch {
         return faviconUrl;
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Erro ao resolver URL do favicon:', error);
       return faviconUrl;
     }
@@ -228,7 +254,7 @@ const createNewTab = (url: string | undefined = undefined) => {
       // Adiciona ao histórico DEPOIS de garantir que temos URL e título
       if (url && !url.startsWith('hera://')) {
         const finalTitle = title || url;
-        addHistoryEntry(url, finalTitle).catch(err => {
+        addHistoryEntry(url, finalTitle).catch((err: unknown) => {
           console.error('Erro ao adicionar ao histórico:', err);
         });
       }
@@ -368,7 +394,7 @@ const closeTab = (id: string) => {
   }
   
   // Salva estado das abas após fechar uma aba
-  saveTabsState().catch(err => console.error('Erro ao salvar estado das abas:', err));
+  saveTabsState().catch((err: unknown) => console.error('Erro ao salvar estado das abas:', err));
 };
 
 // --- Janela Principal ---
@@ -433,9 +459,9 @@ const createWindow = (): void => {
   // Get menu height after it loads
   menuView.webContents.on('did-finish-load', async () => {
     const height = await menuView.webContents.executeJavaScript(
-      'document.getElementById(\"main-menu\").offsetHeight'
+      'document.getElementById("main-menu").offsetHeight'
     );
-    console.log(`Menu view did-finish-load, height: ${height}`);
+
     dynamicMenuHeight = height;
   });
 
@@ -451,7 +477,7 @@ app.whenReady().then(async () => {
   try {
     await initDatabase();
     console.log('Banco de dados SQLite inicializado');
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Erro ao inicializar banco de dados:', error);
   }
 
@@ -499,7 +525,7 @@ app.whenReady().then(async () => {
                 finalUrl = searchEngines[searchEngine] || searchEngines.google;
               }
               activeView.webContents.loadURL(finalUrl);
-            })().catch(err => {
+            })().catch((err: unknown) => {
               console.error('Erro ao processar navegação:', err);
             });
           }
@@ -530,6 +556,18 @@ app.whenReady().then(async () => {
               } else {
                 filePath = path.join(appPath, pathname);
               }
+            } else if (host === 'history') {
+              if (pathname === '/' || pathname === '') {
+                filePath = path.join(appPath, 'history.html');
+              } else {
+                filePath = path.join(appPath, pathname);
+              }
+            } else if (host === 'downloads') {
+              if (pathname === '/' || pathname === '') {
+                filePath = path.join(appPath, 'downloads.html');
+              } else {
+                filePath = path.join(appPath, pathname);
+              }
             }
             // --- FIM DA MUDANÇA ---
             else {
@@ -552,7 +590,7 @@ app.whenReady().then(async () => {
         return new Response('Not Found', { status: 404 });
       }
 
-    } catch (error) {
+    } catch (error: unknown) {
       console.error(`Falha ao lidar com o protocolo hera: ${error}`);
       return new Response('Internal Server Error', { status: 500 });
     }
@@ -561,9 +599,32 @@ app.whenReady().then(async () => {
 
   // --- Handlers de IPC (MUDANÇA v2.2) ---
   // Agora 'createNewTab' recebe a URL (que pode ser undefined)
-  ipcMain.handle('tab:new', (e, url) => createNewTab(url));
-  ipcMain.handle('tab:switch', (e, id) => switchToTab(id));
-  ipcMain.handle('tab:close', (e, id) => closeTab(id));
+  ipcMain.handle('tab:new', (_e, url?: string) => {
+    // Validate input parameter
+    if (url !== undefined && typeof url !== 'string') {
+      console.error('URL inválida fornecida para tab:new');
+      return createNewTab();
+    }
+    return createNewTab(url);
+  });
+  
+  ipcMain.handle('tab:switch', (_e, id: string) => {
+    // Validate input parameter
+    if (typeof id !== 'string' || !id.trim()) {
+      console.error('ID de aba inválido fornecido para tab:switch');
+      return;
+    }
+    return switchToTab(id);
+  });
+  
+  ipcMain.handle('tab:close', (_e, id: string) => {
+    // Validate input parameter
+    if (typeof id !== 'string' || !id.trim()) {
+      console.error('ID de aba inválido fornecido para tab:close');
+      return;
+    }
+    return closeTab(id);
+  });
   
   ipcMain.handle('nav:back', () => {
     const activeView = tabs.get(activeTabId);
@@ -578,7 +639,14 @@ app.whenReady().then(async () => {
     }
   });
   ipcMain.handle('nav:reload', () => tabs.get(activeTabId)?.webContents.reload());
-  ipcMain.handle('nav:to', (e, url) => tabs.get(activeTabId)?.webContents.loadURL(url));
+  ipcMain.handle('nav:to', (_e, url: string) => {
+    // Validate input parameter
+    if (typeof url !== 'string' || !url.trim()) {
+      console.error('URL inválida fornecida para nav:to');
+      return;
+    }
+    return tabs.get(activeTabId)?.webContents.loadURL(url);
+  });
 
   ipcMain.handle('nav:get-state', () => {
     if (!activeTabId || !tabs.has(activeTabId)) {
@@ -592,7 +660,6 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.on('menu:toggle', () => {
-    console.log('Received menu:toggle IPC message in main process!');
     if (isMenuVisible) {
       mainWindow.removeBrowserView(menuView);
     } else {
@@ -611,7 +678,7 @@ app.whenReady().then(async () => {
     isMenuVisible = !isMenuVisible;
   });
 
-  ipcMain.on('menu:action', (event, action) => {
+  ipcMain.on('menu:action', (_event, action: string) => {
     // Hide the menu first
     if (isMenuVisible) {
       mainWindow.removeBrowserView(menuView);
@@ -648,114 +715,188 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle('window:close', () => mainWindow.close());
 
-  ipcMain.handle('history:get', async () => {
+  ipcMain.handle('history:get', async (): Promise<HistoryEntry[]> => {
     try {
-      return await getHistory(1000); // Limite de 1000 entradas mais recentes
-    } catch (error) {
+      const history = await getHistory(1000); // Limite de 1000 entradas mais recentes
+      return validateHistoryEntries(history);
+    } catch (error: unknown) {
       console.error('Erro ao obter histórico:', error);
       return [];
     }
   });
-  ipcMain.handle('history:clear', async () => {
+  ipcMain.handle('history:clear', async (): Promise<void> => {
     try {
       await clearHistory();
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Erro ao limpar histórico:', error);
       throw error;
     }
   });
 
   // Settings handlers
-  ipcMain.handle('settings:get', async (e, key: string) => {
+  ipcMain.handle('settings:get', async (_e, key: string): Promise<string | null> => {
     try {
+      // Validate input parameter
+      if (typeof key !== 'string' || !key.trim()) {
+        throw new Error('Chave de configuração inválida');
+      }
+      
       return await getSetting(key);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Erro ao obter configuração:', error);
       return null;
     }
   });
 
-  ipcMain.handle('settings:set', async (e, key: string, value: string) => {
+  ipcMain.handle('settings:set', async (_e, key: string, value: string): Promise<boolean> => {
     try {
+      // Validate input parameters
+      if (typeof key !== 'string' || !key.trim()) {
+        throw new Error('Chave de configuração inválida');
+      }
+      if (typeof value !== 'string') {
+        throw new Error('Valor de configuração inválido');
+      }
+      
       await setSetting(key, value);
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Erro ao salvar configuração:', error);
       throw error;
     }
   });
 
-  ipcMain.handle('settings:getAll', async () => {
+  ipcMain.handle('settings:getAll', async (): Promise<Record<string, string>> => {
     try {
       return await getAllSettings();
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Erro ao obter todas as configurações:', error);
       return {};
     }
   });
 
   // Bookmark handlers
-  ipcMain.handle('bookmark:add', async (e, url: string, title: string, favicon?: string, folderId?: string) => {
+  ipcMain.handle('bookmark:add', async (_e, url: string, title: string, favicon?: string, folderId?: string): Promise<Bookmark> => {
     try {
+      // Validate input parameters
+      if (typeof url !== 'string' || !url.trim()) {
+        throw new Error('URL inválida');
+      }
+      if (typeof title !== 'string' || !title.trim()) {
+        throw new Error('Título inválido');
+      }
+      if (favicon !== undefined && typeof favicon !== 'string') {
+        throw new Error('Favicon inválido');
+      }
+      if (folderId !== undefined && typeof folderId !== 'string') {
+        throw new Error('ID da pasta inválido');
+      }
+      
       return await addBookmark(url, title, favicon, folderId);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Erro ao adicionar favorito:', error);
       throw error;
     }
   });
 
-  ipcMain.handle('bookmark:remove', async (e, id: string) => {
+  ipcMain.handle('bookmark:remove', async (_e, id: string): Promise<boolean> => {
     try {
+      // Validate input parameter
+      if (typeof id !== 'string' || !id.trim()) {
+        throw new Error('ID inválido');
+      }
+      
       await removeBookmark(id);
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Erro ao remover favorito:', error);
       throw error;
     }
   });
 
-  ipcMain.handle('bookmark:get', async (e, folderId?: string) => {
+  ipcMain.handle('bookmark:get', async (_e, folderId?: string): Promise<Bookmark[]> => {
     try {
-      return await getBookmarks(folderId);
-    } catch (error) {
+      // Validate input parameter
+      if (folderId !== undefined && typeof folderId !== 'string') {
+        throw new Error('ID da pasta inválido');
+      }
+      
+      const bookmarks = await getBookmarks(folderId);
+      return validateBookmarks(bookmarks);
+    } catch (error: unknown) {
       console.error('Erro ao buscar favoritos:', error);
       return [];
     }
   });
 
-  ipcMain.handle('bookmark:search', async (e, query: string) => {
+  ipcMain.handle('bookmark:search', async (_e, query: string): Promise<Bookmark[]> => {
     try {
-      return await searchBookmarks(query);
-    } catch (error) {
+      // Validate input parameter
+      if (typeof query !== 'string') {
+        throw new Error('Query de busca inválida');
+      }
+      
+      const bookmarks = await searchBookmarks(query);
+      return validateBookmarks(bookmarks);
+    } catch (error: unknown) {
       console.error('Erro ao buscar favoritos:', error);
       return [];
     }
   });
 
-  ipcMain.handle('bookmark:create-folder', async (e, name: string, parentId?: string) => {
+  ipcMain.handle('bookmark:create-folder', async (_e, name: string, parentId?: string): Promise<BookmarkFolder> => {
     try {
+      // Validate input parameters
+      if (typeof name !== 'string' || !name.trim()) {
+        throw new Error('Nome da pasta inválido');
+      }
+      if (parentId !== undefined && typeof parentId !== 'string') {
+        throw new Error('ID da pasta pai inválido');
+      }
+      
       return await createBookmarkFolder(name, parentId);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Erro ao criar pasta de favoritos:', error);
       throw error;
     }
   });
 
-  ipcMain.handle('bookmark:get-folders', async (e, parentId?: string) => {
+  ipcMain.handle('bookmark:get-folders', async (_e, parentId?: string): Promise<BookmarkFolder[]> => {
     try {
+      // Validate input parameter
+      if (parentId !== undefined && typeof parentId !== 'string') {
+        throw new Error('ID da pasta pai inválido');
+      }
+      
       return await getBookmarkFolders(parentId);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Erro ao buscar pastas de favoritos:', error);
       return [];
     }
   });
 
   // Download handlers
-  ipcMain.handle('download:show-in-folder', (e, filePath: string) => {
+  ipcMain.handle('download:show-in-folder', (_e, filePath: string): void => {
+    // Validate input parameter
+    if (typeof filePath !== 'string' || !filePath.trim()) {
+      console.error('Caminho de arquivo inválido fornecido para download:show-in-folder');
+      return;
+    }
     shell.showItemInFolder(filePath);
   });
-  ipcMain.handle('download:open-file', (e, filePath: string) => {
+  
+  ipcMain.handle('download:open-file', (_e, filePath: string): void => {
+    // Validate input parameter
+    if (typeof filePath !== 'string' || !filePath.trim()) {
+      console.error('Caminho de arquivo inválido fornecido para download:open-file');
+      return;
+    }
     shell.openPath(filePath);
+  });
+
+  ipcMain.handle('download:open-folder', (): void => {
+    const downloadsPath = app.getPath('downloads');
+    shell.openPath(downloadsPath);
   });
   
   createWindow();
@@ -784,7 +925,7 @@ app.whenReady().then(async () => {
       // Se não houver abas salvas, cria uma nova aba padrão
       createNewTab();
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Erro ao restaurar abas salvas:', error);
     // Em caso de erro, cria uma nova aba padrão
     createNewTab();
@@ -802,16 +943,17 @@ app.whenReady().then(async () => {
       const id = uuidv4();
       const filename = item.getFilename();
       const totalBytes = item.getTotalBytes();
+      const savePath = item.getSavePath();
 
       if (mainWindow && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
-        mainWindow.webContents.send('download-started', { id, filename, totalBytes });
+        mainWindow.webContents.send('download-started', { id, filename, totalBytes, savePath });
       }
 
       item.on('updated', (event, state) => {
         if (state === 'progressing') {
           const receivedBytes = item.getReceivedBytes();
           if (mainWindow && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
-            mainWindow.webContents.send('download-progress', { id, receivedBytes });
+            mainWindow.webContents.send('download-progress', { id, receivedBytes, totalBytes, savePath });
           }
         }
       });
@@ -819,12 +961,12 @@ app.whenReady().then(async () => {
       item.on('done', (event, state) => {
         const path = item.getSavePath();
         if (mainWindow && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
-          mainWindow.webContents.send('download-complete', { id, state, path });
+          mainWindow.webContents.send('download-complete', { id, state, savePath: path });
         }
       });
     });
   }
-}).catch((error) => {
+}).catch((error: unknown) => {
   console.error('Erro ao inicializar aplicação:', error);
 });
 
@@ -850,7 +992,7 @@ const saveTabsState = async () => {
     }
     
     await saveOpenTabs(tabsArray);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Erro ao salvar estado das abas:', error);
   }
 };

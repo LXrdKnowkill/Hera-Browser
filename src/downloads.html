@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Downloads - Hera Browser</title>
+  <link rel="stylesheet" href="downloads.css">
+</head>
+<body>
+  <div class="downloads-container">
+    <header class="downloads-header">
+      <div class="header-content">
+        <img src="HeraBrowser256x256.png" alt="Hera Browser" class="logo">
+        <h1>Downloads</h1>
+      </div>
+      <div class="header-actions">
+        <button id="open-folder-btn" class="btn-secondary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+          </svg>
+          Abrir Pasta de Downloads
+        </button>
+        <button id="clear-completed-btn" class="btn-danger">Limpar Concluídos</button>
+      </div>
+    </header>
+
+    <main class="downloads-main">
+      <div id="downloads-list" class="downloads-list">
+        <!-- Items serão inseridos aqui via JavaScript -->
+      </div>
+      
+      <div id="empty-state" class="empty-state hidden">
+        <svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        <h2>Nenhum download</h2>
+        <p>Seus downloads aparecerão aqui</p>
+      </div>
+    </main>
+  </div>
+
+  <script src="downloads.js"></script>
+</body>
+</html>

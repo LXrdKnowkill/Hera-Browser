@@ -1,78 +1,28 @@
 import './index.css';
 
 // ========================================
-// TIPOS E INTERFACES (NO TOPO DO ARQUIVO!)
+// IMPORTS DE TIPOS
 // ========================================
-interface TabInfo {
-  id: string;
-  title: string;
-  url: string;
-  favicon?: string;
-}
+import type {
+  HeraAPI,
+  Bookmark,
+  HistoryEntry,
+  TabInfo,
+  TabUpdateInfo
+} from './types';
 
-interface TabUpdateInfo {
-  title?: string;
-  url?: string;
-  favicon?: string;
-  loading?: boolean;
-}
+// Import validation functions (not type-only)
+import {
+  validateBookmarks,
+  validateHistoryEntries
+} from './types';
 
-interface NavigationState {
-  canGoBack: boolean;
-  canGoForward: boolean;
-}
-
-// O "DICIONÁRIO" (NO TOPO DO ARQUIVO!)
+// ========================================
+// DECLARAÇÃO GLOBAL DA API
+// ========================================
 declare global {
   interface Window {
-    heraAPI: {
-      // Tab Actions
-      createNewTab: (url?: string) => void;
-      switchToTab: (id: string) => void;
-      closeTab: (id: string) => void;
-
-      // Navigation Actions
-      navigateTo: (url: string) => void;
-      navigateBack: () => void;
-      navigateForward: () => void;
-      navigateReload: () => void;
-      getNavigationState: () => Promise<NavigationState>;
-
-      // Window Actions
-      windowMinimize: () => void;
-      windowMaximize: () => void;
-      windowClose: () => void;
-
-      // Download Actions
-      showItemInFolder: (path: string) => Promise<void>;
-      openFile: (path: string) => Promise<void>;
-
-      // History Actions
-      getHistory: () => Promise<{ url: string; title: string; timestamp: number }[]>;
-      clearHistory: () => Promise<void>;
-
-      // Settings Actions
-      getSetting: (key: string) => Promise<string | null>;
-      setSetting: (key: string, value: string) => Promise<boolean>;
-      getAllSettings: () => Promise<Record<string, string>>;
-
-      // View Actions
-      toggleMenu: () => void;
-      menuAction: (action: string) => void;
-      
-      // Listeners from Main Process
-      onTabCreated: (callback: (tabInfo: TabInfo) => void) => void;
-      onTabSwitched: (callback: (id: string, url: string) => void) => void;
-      onTabUpdated: (callback: (id: string, tabInfo: TabUpdateInfo) => void) => void;
-      onTabClosed: (callback: (id: string) => void) => void;
-      onTabLoading: (callback: (id: string, isLoading: boolean) => void) => void;
-      onSetUIVisibility: (callback: (visible: boolean) => void) => void;
-      onWindowMaximizedStatus: (callback: (isMaximized: boolean) => void) => void;
-      on: (channel: string, callback: (...args: any[]) => void) => void;
-      onDownloadStarted: (callback: (data: { id: string; filename: string; totalBytes: number; }) => void) => void;
-      onDownloadProgress: (callback: (data: { id: string; receivedBytes: number; }) => void) => void;
-      onDownloadComplete: (callback: (data: { id: string; state: string; path: string; }) => void) => void;
-    };
+    heraAPI: HeraAPI;
   }
 }
 
@@ -123,7 +73,7 @@ window.addEventListener('DOMContentLoaded', () => {
     menuBtn.addEventListener('click', () => {
 
 
-      console.log('Menu button clicked in renderer!');
+
 
 
       window.heraAPI.toggleMenu();
@@ -217,7 +167,7 @@ window.addEventListener('DOMContentLoaded', () => {
   };
 
   const setActiveTab = (id: string) => {
-    document.querySelectorAll('.tab-item').forEach(tab => tab.classList.remove('active'));
+    document.querySelectorAll('.tab-item').forEach((tab: Element) => tab.classList.remove('active'));
     const tabElement = document.getElementById(`tab-${id}`);
     if (tabElement) {
       tabElement.classList.add('active');
@@ -300,8 +250,12 @@ window.addEventListener('DOMContentLoaded', () => {
       const state = await window.heraAPI.getNavigationState();
       backBtn.disabled = !state.canGoBack;
       forwardBtn.disabled = !state.canGoForward;
-    } catch (error) {
-      console.error('Erro ao obter estado de navegação:', error);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error('Erro ao obter estado de navegação:', error.message);
+      } else {
+        console.error('Erro ao obter estado de navegação:', error);
+      }
     }
   };
 
@@ -356,14 +310,15 @@ window.addEventListener('DOMContentLoaded', () => {
 
     try {
       // Buscar no histórico
-      const history = await window.heraAPI.getHistory();
+      const historyRaw = await window.heraAPI.getHistory();
+      const history = validateHistoryEntries(historyRaw);
       const historyMatches = history
-        .filter(item => 
+        .filter((item: HistoryEntry) => 
           item.title.toLowerCase().includes(query.toLowerCase()) || 
           item.url.toLowerCase().includes(query.toLowerCase())
         )
         .slice(0, 5)
-        .map(item => ({
+        .map((item: HistoryEntry) => ({
           type: 'history' as const,
           title: item.title,
           url: item.url,
@@ -373,10 +328,11 @@ window.addEventListener('DOMContentLoaded', () => {
       suggestions.push(...historyMatches);
 
       // Buscar nos favoritos
-      const bookmarks = await window.heraAPI.searchBookmarks(query);
+      const bookmarksRaw = await window.heraAPI.searchBookmarks(query);
+      const bookmarks = validateBookmarks(bookmarksRaw);
       const bookmarkMatches = bookmarks
         .slice(0, 3)
-        .map(bookmark => ({
+        .map((bookmark: Bookmark) => ({
           type: 'bookmark' as const,
           title: bookmark.title,
           url: bookmark.url || '',
@@ -384,8 +340,12 @@ window.addEventListener('DOMContentLoaded', () => {
         }));
       
       suggestions.push(...bookmarkMatches);
-    } catch (error) {
-      console.error('Erro ao buscar sugestões:', error);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error('Erro ao buscar sugestões:', error.message);
+      } else {
+        console.error('Erro ao buscar sugestões:', error);
+      }
     }
 
     return suggestions.slice(0, 8); // Máximo 8 sugestões
@@ -402,8 +362,12 @@ window.addEventListener('DOMContentLoaded', () => {
       };
 
       return searchEngines[searchEngine] || searchEngines.google;
-    } catch (error) {
-      console.error('Erro ao obter mecanismo de busca:', error);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error('Erro ao obter mecanismo de busca:', error.message);
+      } else {
+        console.error('Erro ao obter mecanismo de busca:', error);
+      }
       return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
     }
   };
@@ -415,7 +379,7 @@ window.addEventListener('DOMContentLoaded', () => {
     try {
       new URL(text);
       window.heraAPI.navigateTo(text);
-    } catch (_) {
+    } catch (_: unknown) {
       const isUrlLike = /^(localhost)|([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}/.test(text);
       if (isUrlLike && !text.startsWith('http')) {
         window.heraAPI.navigateTo('https://' + text);
@@ -433,7 +397,8 @@ window.addEventListener('DOMContentLoaded', () => {
     historyList.innerHTML = '<div style="text-align: center; padding: 40px; color: #888;">Carregando...</div>';
 
     try {
-      const history = await window.heraAPI.getHistory();
+      const historyRaw = await window.heraAPI.getHistory();
+      const history = validateHistoryEntries(historyRaw);
       historyList.innerHTML = '';
 
       const historyEmpty = document.getElementById('history-empty')!;
@@ -445,9 +410,9 @@ window.addEventListener('DOMContentLoaded', () => {
         historyEmpty.classList.add('hidden');
       }
 
-      console.log('Histórico carregado:', history.length, 'itens');
 
-      history.forEach(item => {
+
+      history.forEach((item: HistoryEntry) => {
         const el = document.createElement('div');
         el.className = 'history-item';
         el.title = `${item.url}\n${new Date(item.timestamp).toLocaleString()}`;
@@ -477,8 +442,12 @@ window.addEventListener('DOMContentLoaded', () => {
         });
         historyList.appendChild(el);
       });
-    } catch (error) {
-      console.error('Erro ao carregar histórico:', error);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error('Erro ao carregar histórico:', error.message);
+      } else {
+        console.error('Erro ao carregar histórico:', error);
+      }
       historyList.innerHTML = '<div style="text-align: center; padding: 40px; color: #ff6b6b;">Erro ao carregar histórico.</div>';
     }
   };
@@ -532,9 +501,13 @@ window.addEventListener('DOMContentLoaded', () => {
               const favicon = faviconImg?.src;
               const url = urlInput.value;
               if (url && !url.startsWith('hera://')) {
-                window.heraAPI.addBookmark(url, title, favicon).then(() => {
-                  console.log('Favorito adicionado!');
-                }).catch(err => console.error('Erro ao adicionar favorito:', err));
+                window.heraAPI.addBookmark(url, title, favicon).catch((error: unknown) => {
+                  if (error instanceof Error) {
+                    console.error('Erro ao adicionar favorito:', error.message);
+                  } else {
+                    console.error('Erro ao adicionar favorito:', error);
+                  }
+                });
               }
             }
           }
@@ -543,7 +516,6 @@ window.addEventListener('DOMContentLoaded', () => {
           if (!shift) {
             e.preventDefault();
             // Busca rápida na página - será implementado
-            console.log('Busca rápida (Ctrl+F) - Em desenvolvimento');
           }
           break;
         // Ctrl+1-9: Navegar para aba específica
@@ -612,7 +584,7 @@ window.addEventListener('DOMContentLoaded', () => {
     omniboxSuggestionsEl.innerHTML = '';
     omniboxSuggestionsEl.classList.remove('hidden');
 
-    suggestions.forEach((suggestion, index) => {
+    suggestions.forEach((suggestion: { type: 'history' | 'bookmark' | 'search'; title: string; url: string; favicon?: string }, index: number) => {
       const item = document.createElement('div');
       item.className = `omnibox-suggestion-item ${index === selectedSuggestionIndex ? 'selected' : ''}`;
       item.dataset.index = index.toString();
@@ -672,7 +644,7 @@ window.addEventListener('DOMContentLoaded', () => {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         selectedSuggestionIndex = Math.min(selectedSuggestionIndex + 1, items.length - 1);
-        items.forEach((item, idx) => {
+        items.forEach((item: Element, idx: number) => {
           item.classList.toggle('selected', idx === selectedSuggestionIndex);
         });
         if (selectedSuggestionIndex >= 0) {
@@ -684,7 +656,7 @@ window.addEventListener('DOMContentLoaded', () => {
       if (e.key === 'ArrowUp') {
         e.preventDefault();
         selectedSuggestionIndex = Math.max(selectedSuggestionIndex - 1, -1);
-        items.forEach((item, idx) => {
+        items.forEach((item: Element, idx: number) => {
           item.classList.toggle('selected', idx === selectedSuggestionIndex);
         });
         return;
@@ -757,7 +729,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const items = historyList.querySelectorAll('.history-item');
     let visibleCount = 0;
     
-    items.forEach((item) => {
+    items.forEach((item: Element) => {
       const title = item.querySelector('.history-item-title')?.textContent?.toLowerCase() || '';
       const url = item.querySelector('.history-item-url')?.textContent?.toLowerCase() || '';
       const matches = title.includes(query) || url.includes(query);
@@ -767,8 +739,8 @@ window.addEventListener('DOMContentLoaded', () => {
     
     if (visibleCount === 0 && query.length > 0) {
       historyEmpty.classList.remove('hidden');
-      historyEmpty.querySelector('p')!.textContent = 'Nenhum resultado encontrado';
-      historyEmpty.querySelector('span')!.textContent = 'Tente uma busca diferente';
+      historyEmpty.querySelector('p')?.textContent = 'Nenhum resultado encontrado';
+      historyEmpty.querySelector('span')?.textContent = 'Tente uma busca diferente';
     } else {
       historyEmpty.classList.add('hidden');
     }
@@ -785,13 +757,18 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     
     try {
-      const bookmarks = await window.heraAPI.getBookmarks();
+      const bookmarksRaw = await window.heraAPI.getBookmarks();
+      const bookmarks = validateBookmarks(bookmarksRaw);
       const currentUrl = urlInput.value;
-      const bookmark = bookmarks.find(b => b.url === currentUrl);
+      const bookmark = bookmarks.find((b: Bookmark) => b.url === currentUrl);
       isBookmarked = !!bookmark;
       bookmarkBtn.classList.toggle('active', isBookmarked);
-    } catch (error) {
-      console.error('Erro ao verificar favorito:', error);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error('Erro ao verificar favorito:', error.message);
+      } else {
+        console.error('Erro ao verificar favorito:', error);
+      }
     }
   };
   
@@ -811,8 +788,9 @@ window.addEventListener('DOMContentLoaded', () => {
     try {
       if (isBookmarked) {
         // Remover favorito
-        const bookmarks = await window.heraAPI.getBookmarks();
-        const bookmark = bookmarks.find(b => b.url === url);
+        const bookmarksRaw = await window.heraAPI.getBookmarks();
+        const bookmarks = validateBookmarks(bookmarksRaw);
+        const bookmark = bookmarks.find((b: Bookmark) => b.url === url);
         if (bookmark) {
           await window.heraAPI.removeBookmark(bookmark.id);
           isBookmarked = false;
@@ -824,8 +802,12 @@ window.addEventListener('DOMContentLoaded', () => {
         isBookmarked = true;
         bookmarkBtn.classList.add('active');
       }
-    } catch (error) {
-      console.error('Erro ao gerenciar favorito:', error);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error('Erro ao gerenciar favorito:', error.message);
+      } else {
+        console.error('Erro ao gerenciar favorito:', error);
+      }
     }
   });
   
@@ -914,7 +896,7 @@ window.addEventListener('DOMContentLoaded', () => {
       if (totalBytes > 0) {
         const percent = Math.min((data.receivedBytes / totalBytes) * 100, 100);
         progressBar.style.width = `${percent}%`;
-        statusSpan!.textContent = `${(data.receivedBytes / 1024 / 1024).toFixed(2)} MB / ${(totalBytes / 1024 / 1024).toFixed(2)} MB`;
+        statusSpan?.textContent = `${(data.receivedBytes / 1024 / 1024).toFixed(2)} MB / ${(totalBytes / 1024 / 1024).toFixed(2)} MB`;
       }
     }
   });
@@ -979,7 +961,7 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 
   window.heraAPI.onSetUIVisibility((visible) => {
-    [tabBar, navBar, favoritesBar].forEach(el => (el as HTMLElement).style.display = visible ? 'flex' : 'none');
+    [tabBar, navBar, favoritesBar].forEach((el: HTMLElement) => el.style.display = visible ? 'flex' : 'none');
   });
 
   window.heraAPI.onWindowMaximizedStatus((isMaximized) => {
@@ -995,6 +977,5 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 
   // ========================================// INICIALIZAÇÃO// ========================================
-  console.log('🚀 Hera Browser Renderer inicializado');
 
 }); // Fecha o 'DOMContentLoaded'

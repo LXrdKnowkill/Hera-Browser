@@ -1,6 +1,57 @@
 # Changelog - Hera Browser
 
-## [2.0.0] - 2024
+## [2.0.1] - 2025-11-03
+
+### ✨ New Features
+
+#### Páginas Dedicadas
+- ✅ **Página de Histórico** (`hera://history`)
+  - Interface moderna e intuitiva para visualizar histórico
+  - Busca em tempo real por título ou URL
+  - Agrupamento automático por data (Hoje, Ontem, datas específicas)
+  - Remoção de itens individuais
+  - Limpeza completa do histórico
+  - Navegação ao clicar em qualquer item
+
+- ✅ **Página de Downloads** (`hera://downloads`)
+  - Interface dedicada para gerenciar downloads
+  - Visualização de progresso em tempo real
+  - Ícones dinâmicos por tipo de arquivo (PDF, imagens, arquivos, etc.)
+  - **Abrir arquivo baixado** com um clique
+  - **Mostrar arquivo na pasta** do sistema
+  - Abrir pasta de downloads padrão
+  - Persistência de downloads entre sessões
+  - Limpeza de downloads concluídos
+
+#### APIs de Download
+- ✅ `openDownloadedFile()` - Abre arquivo baixado
+- ✅ `showDownloadInFolder()` - Mostra arquivo na pasta do sistema
+- ✅ `openDownloadsFolder()` - Abre pasta de downloads padrão
+
+### 🎨 UI/UX Improvements
+- Design moderno e consistente com tema escuro
+- Animações suaves e transições
+- Estados vazios informativos
+- Responsivo para diferentes tamanhos de tela
+- Favicons nos itens de histórico
+- Barra de progresso animada para downloads
+
+### 🔧 Technical Improvements
+- **100% TypeScript Type Coverage** - Zero erros de tipo no código fonte
+- Código limpo e organizado
+- Imports organizados por categoria
+- Remoção de código não utilizado
+- Documentação completa das APIs
+
+### 📝 Documentation
+- Documentação completa das novas páginas
+- Guia de testes manuais
+- Resumo de validação de tipos
+- Documentação de limpeza de código
+
+---
+
+## [2.0.0] - 2025
 
 ### 🚀 Major Features
 
