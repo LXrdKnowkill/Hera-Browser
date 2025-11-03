@@ -1,6 +1,6 @@
 # Changelog - Hera Browser
 
-## [2.0.0] - 2024
+## [2.0.0] - 2025
 
 ### 🚀 Major Features
 
