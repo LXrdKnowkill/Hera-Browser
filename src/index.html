@@ -112,7 +112,29 @@
     </div>
 
     <!-- Barra de Favoritos -->
-    <div id="favorites-bar"></div>
+    <div id="favorites-bar-wrapper" class="favorites-bar-wrapper hidden">
+        <div id="favorites-bar"></div>
+        <button id="favorites-bar-close" class="favorites-bar-close-btn" title="Ocultar barra de favoritos (Ctrl+B)">×</button>
+    </div>
+
+    <!-- Barra de Busca na Página -->
+    <div id="find-bar" class="find-bar hidden">
+        <div class="find-bar-content">
+            <input type="text" id="find-input" placeholder="Buscar na página" autocomplete="off">
+            <span id="find-results" class="find-results">0 de 0</span>
+            <button id="find-prev" class="find-nav-btn" title="Anterior (Shift+Enter)">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="18 15 12 9 6 15"/>
+                </svg>
+            </button>
+            <button id="find-next" class="find-nav-btn" title="Próximo (Enter)">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"/>
+                </svg>
+            </button>
+            <button id="find-close" class="find-close-btn" title="Fechar (Esc)">×</button>
+        </div>
+    </div>
 
     <!-- Página de Histórico (Oculta por padrão) -->
     <div id="history-page" class="hidden">

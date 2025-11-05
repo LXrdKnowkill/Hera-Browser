@@ -1,5 +1,53 @@
 # Changelog - Hera Browser
 
+## [2.0.5] - 2025-11-05
+
+### ✨ New Features
+
+#### Find in Page (Busca na Página)
+- ✨ **Ctrl+F** abre barra de busca integrada
+- ✨ **Busca em tempo real** enquanto digita (com debounce de 150ms)
+- ✨ **Contador de resultados** mostra "X de Y" resultados encontrados
+- ✨ **Navegação com botões** anterior/próximo
+- ✨ **Enter/Shift+Enter** para navegar entre resultados
+- ✨ **Escape ou botão X** fecha a barra
+- ✨ **Feedback visual** - borda vermelha quando não há resultados
+- ✨ **Isolamento entre abas** - cada aba tem sua própria busca independente
+- ✨ **Persistência de estado** - ao trocar de aba e voltar, a busca continua
+- ✨ **Visibilidade por aba** - a barra só aparece nas abas onde foi aberta
+- ✨ **Busca em páginas internas** (hera://new-tab, hera://settings, etc.)
+- ✨ **Caracteres especiais** funcionam corretamente
+- ✨ **Navegação circular** - do último resultado volta para o primeiro
+- ✨ **Scroll automático** para o resultado visível (nativo do Electron)
+
+### 🚀 Performance Improvements
+
+#### Memory Leak Fixes
+- ⚡ **Debounce na busca** - aguarda 150ms após parar de digitar para evitar buscas excessivas
+- ⚡ **Cleanup ao fechar aba** - para busca ativa e destroi webContents para liberar memória
+- ⚡ **Listeners isolados** - apenas a aba ativa envia resultados para UI
+- ⚡ **Remoção de listeners** ao fechar abas para evitar memory leaks
+
+### 🎨 UI/UX Improvements
+- ✨ Barra de busca moderna e integrada ao design
+- ✨ Animações suaves ao abrir/fechar
+- ✨ Ícones SVG para botões de navegação
+- ✨ Input com placeholder e auto-focus
+- ✨ Contador de resultados sempre visível
+- ✨ Botão de fechar com animação de rotação
+
+### 🔧 Technical Details
+- ✅ Implementado sistema de estado por aba com `Map<string, TabFindState>`
+- ✅ Funções `saveFindState()` e `restoreFindState()` para persistência
+- ✅ Handlers IPC: `find:start`, `find:next`, `find:stop`, `find:restore-state`
+- ✅ Listener `found-in-page` em cada BrowserView com filtro por aba ativa
+- ✅ Cleanup automático ao trocar/fechar abas
+- ✅ Debounce implementado para otimizar performance
+- ✅ Fixing Error about favorite system.
+
+---
+
+
 ## [2.0.4.1] - 2025-11-04
 
 ### 🔧 Hotfix - Empacotamento e Build

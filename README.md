@@ -1,268 +1,270 @@
-# 🌟 Hera Browser
+# Hera Browser
 
-Um navegador moderno e elegante construído com Electron, inspirado nas melhores práticas do Chromium.
+A modern, feature-rich web browser built with Electron and TypeScript, designed for performance, security, and user experience.
 
-![Version](https://img.shields.io/badge/version-2.0.4-blue.svg)
+![Version](https://img.shields.io/badge/version-2.0.5-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Electron](https://img.shields.io/badge/Electron-38.4.0-47848F.svg)
 ![TypeScript](https://img.shields.io/badge/TypeScript-100%25-blue.svg)
 
-## ✨ Características
+## Overview
 
-### 🚀 Funcionalidades Principais
-- ✅ **Sistema de Abas Avançado** - Gerencia múltiplas abas com persistência entre sessões
-- ✅ **Sistema de Favoritos Completo** - Organize seus sites favoritos com suporte a pastas
-- ✅ **Barra de Favoritos Visual** - Acesso rápido aos seus sites favoritos (v2.0.2)
-- ✅ **Histórico Inteligente** - Busque e navegue pelo seu histórico de forma eficiente
-- ✅ **Páginas Dedicadas** - `hera://history` e `hera://downloads` (v2.0.1)
-- ✅ **Omnibox Inteligente** - Sugestões em tempo real baseadas em histórico e favoritos
-- ✅ **Downloads Gerenciados** - Notificações visuais e gerenciamento completo
-- ✅ **DevTools Integrado** - Ferramentas de desenvolvedor (F12) para debugging
-- ✅ **Interface Moderna** - UI escura e elegante com animações suaves
-- 🔒 **Segurança Aprimorada** - Compartimentalização de preload (v2.0.1)
+Hera Browser is a Chromium-based browser built on Electron, offering a clean and efficient browsing experience with advanced features like intelligent bookmarks, history management, download handling, and in-page search capabilities.
 
-### 🎯 Recursos Avançados
+## Key Features
 
-#### v2.0.2 - Barra de Favoritos
-- 🔖 **Visualização de Favoritos** - Barra superior mostra todos os bookmarks salvos
-- 🎨 **Design Moderno** - Favicons, hover effects e animações suaves
-- ⚡ **Atualização em Tempo Real** - Adicione/remova favoritos e veja na hora
-- 📜 **Scroll Horizontal** - Suporte para muitos favoritos com scrollbar customizada
+### Core Functionality
+- **Multi-Tab Management** - Advanced tab system with session persistence
+- **Bookmark System** - Hierarchical organization with folder support
+- **Smart History** - Efficient search and navigation through browsing history
+- **Download Manager** - Visual notifications and complete download management
+- **Find in Page** - Real-time search with result navigation (v2.0.5)
+- **Developer Tools** - Integrated DevTools accessible via F12
+- **Modern UI** - Dark theme with smooth animations and transitions
 
-#### v2.0.1 - Páginas Dedicadas & Segurança
-- 📜 **Página de Histórico** (`hera://history`)
-  - Busca em tempo real
-  - Agrupamento por data (Hoje, Ontem, etc.)
-  - Remoção individual de itens
-  - Interface moderna e intuitiva
+### Find in Page (v2.0.5)
+The latest addition to Hera Browser provides comprehensive in-page search functionality:
 
-- 📥 **Página de Downloads** (`hera://downloads`)
-  - Visualização de progresso em tempo real
-  - Abrir arquivo ou mostrar na pasta
-  - Ícones por tipo de arquivo
-  - Persistência entre sessões
+- **Real-time Search** - Results appear as you type with 150ms debounce optimization
+- **Result Counter** - Displays "X of Y" matches found
+- **Navigation Controls** - Previous/next buttons and keyboard shortcuts (Enter/Shift+Enter)
+- **Visual Feedback** - Red border indicator when no results are found
+- **Tab Isolation** - Each tab maintains its own independent search state
+- **State Persistence** - Search state is preserved when switching between tabs
+- **Universal Support** - Works on both external websites and internal pages (hera://)
+- **Circular Navigation** - Seamlessly cycles from last to first result
+- **Auto-scroll** - Automatically scrolls to visible results
 
-- 🔔 **Notificações de Download**
-  - Badge contador no botão
-  - Toast notifications
-  - Animação de pulso durante download
-  - Auto-fechamento inteligente
+### Bookmarks & Favorites
+- Visual favorites bar with quick access to saved sites
+- Folder-based organization for better management
+- Real-time updates when adding or removing bookmarks
+- Favicon display for easy site identification
 
-- 🔒 **Segurança Crítica**
-  - Preload compartimentalizado
-  - Sites externos não acessam APIs privilegiadas
-  - Princípio do menor privilégio
+### History & Downloads
+- Dedicated pages accessible via `hera://history` and `hera://downloads`
+- Real-time search and filtering capabilities
+- Date-based grouping for history entries
+- Progress tracking and file management for downloads
+- Toast notifications for download events
 
-#### v2.0.0 - Base Sólida
-- 🔖 **Sistema de Favoritos com Pastas** - Organize seus bookmarks hierarquicamente
-- 🔍 **Omnibox com Autocomplete** - Sugestões inteligentes de histórico, favoritos e busca
-- ⌨️ **Atalhos de Teclado Avançados** - Ctrl+T, Ctrl+W, Ctrl+1-9, Ctrl+Tab, Ctrl+D, etc.
-- 📱 **Persistência de Abas** - Restaura todas as abas ao reiniciar
-- 🎨 **Tema Escuro Moderno** - Interface visualmente agradável e profissional
-- 🔒 **Indicadores de Segurança** - Ícones visuais para conexões HTTP/HTTPS
+### Security
+- Compartmentalized preload scripts for enhanced security
+- Context isolation between trusted and untrusted code
+- Principle of least privilege implementation
+- External sites cannot access privileged browser APIs
 
-## 📸 Screenshots
+## Screenshots
 
-_Em breve..._
+_Coming soon..._
 
-## 🛠️ Tecnologias
+## Technology Stack
 
-- **Electron** 38.4.0 - Framework para aplicações desktop
-- **TypeScript** 4.5.4 - Linguagem de programação (100% type coverage)
-- **SQLite3** - Banco de dados para histórico, favoritos e configurações
-- **Webpack** - Bundler e build system
-- **Electron Forge** - Ferramentas de build e distribuição
+- **Electron** 38.4.0 - Cross-platform desktop application framework
+- **TypeScript** 4.5.4 - Strongly typed programming language (100% type coverage)
+- **SQLite3** - Embedded database for history, bookmarks, and settings
+- **Webpack** - Module bundler and build system
+- **Electron Forge** - Build and distribution tooling
 
-## 📦 Instalação
+## Installation
 
-### Pré-requisitos
-- Node.js 18+ 
-- npm ou yarn
+### Prerequisites
+- Node.js 18 or higher
+- npm or yarn package manager
 
-### Passos
+### Development Setup
 
-1. **Clone o repositório**
+1. Clone the repository
 ```bash
-git clone https://github.com/SEU_USUARIO/hera-browser.git
+git clone https://github.com/YOUR_USERNAME/hera-browser.git
 cd hera-browser
 ```
 
-2. **Instale as dependências**
+2. Install dependencies
 ```bash
 npm install
 ```
 
-3. **Recompile módulos nativos** (para SQLite3)
+3. Rebuild native modules (required for SQLite3)
 ```bash
 npm run rebuild
 ```
 
-4. **Execute o navegador**
+4. Start the development server
 ```bash
 npm start
 ```
 
-## 🔨 Build para Produção
+## Building for Production
 
-### Windows
+### Package the application
 ```bash
 npm run package
 ```
 
-### Criar instalador
+### Create distributable installer
 ```bash
 npm run make
 ```
 
-## ⌨️ Atalhos de Teclado
+The built application will be available in the `out` directory.
 
-| Atalho | Ação |
-|--------|------|
-| `Ctrl+T` | Nova aba |
-| `Ctrl+W` | Fechar aba atual |
-| `Ctrl+R` / `F5` | Recarregar página |
-| `Ctrl+Tab` | Próxima aba |
-| `Ctrl+Shift+Tab` | Aba anterior |
-| `Ctrl+1-9` | Ir para aba número N |
-| `Ctrl+D` | Adicionar/remover favorito |
-| `Ctrl+L` | Focar barra de endereço |
-| `Ctrl+H` | Abrir histórico |
-| `Ctrl+J` | Abrir downloads |
-| `F12` | Abrir/fechar DevTools |
-| `Esc` | Fechar modais/painéis |
+## Keyboard Shortcuts
 
-## 🌐 URLs Internas
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+T` | New tab |
+| `Ctrl+W` | Close current tab |
+| `Ctrl+R` / `F5` | Reload page |
+| `Ctrl+Tab` | Next tab |
+| `Ctrl+Shift+Tab` | Previous tab |
+| `Ctrl+1-9` | Jump to tab number N |
+| `Ctrl+D` | Add/remove bookmark |
+| `Ctrl+L` | Focus address bar |
+| `Ctrl+F` | Find in page |
+| `Enter` | Next search result |
+| `Shift+Enter` | Previous search result |
+| `Ctrl+H` | Open history |
+| `Ctrl+J` | Open downloads |
+| `F12` | Toggle DevTools |
+| `Esc` | Close modals/panels/search |
 
-O Hera Browser possui páginas internas acessíveis via protocolo `hera://`:
+## Internal URLs
 
-| URL | Descrição |
-|-----|-----------|
-| `hera://new-tab` | Página de nova aba |
-| `hera://settings` | Configurações do navegador |
-| `hera://history` | Histórico de navegação (v2.0.1) |
-| `hera://downloads` | Gerenciador de downloads (v2.0.1) |
+Hera Browser provides internal pages accessible via the `hera://` protocol:
 
-## 🗂️ Estrutura do Projeto
+| URL | Description |
+|-----|-------------|
+| `hera://new-tab` | New tab page |
+| `hera://settings` | Browser settings |
+| `hera://history` | Browsing history |
+| `hera://downloads` | Download manager |
+
+## Project Structure
 
 ```
 hera-browser/
 ├── src/
-│   ├── index.ts              # Processo principal (Electron)
-│   ├── renderer.ts           # Renderer process (UI)
-│   ├── preload-ui.ts         # Preload privilegiado (páginas internas)
-│   ├── preload-web.ts        # Preload limitado (sites externos)
-│   ├── database.ts           # Operações SQLite
-│   ├── index.html            # Interface principal
-│   ├── index.css             # Estilos
-│   ├── settings.html/js/css  # Página de configurações
-│   ├── new-tab.html/css      # Página de nova aba
-│   ├── history.html/js/css   # Página de histórico (v2.0.1)
-│   ├── downloads.html/js/css # Página de downloads (v2.0.1)
-│   ├── menu.html/js/css      # Menu de contexto
-│   └── types/                # Definições TypeScript
+│   ├── index.ts              # Main process (Electron)
+│   ├── renderer.ts           # Renderer process (UI logic)
+│   ├── preload-ui.ts         # Privileged preload (internal pages)
+│   ├── preload-web.ts        # Limited preload (external sites)
+│   ├── database.ts           # SQLite operations
+│   ├── index.html            # Main interface
+│   ├── index.css             # Styles
+│   ├── settings.html/js/css  # Settings page
+│   ├── new-tab.html/css      # New tab page
+│   ├── history.html/js/css   # History page
+│   ├── downloads.html/js/css # Downloads page
+│   ├── menu.html/js/css      # Context menu
+│   └── types/                # TypeScript definitions
 │       ├── api.types.ts
 │       ├── database.types.ts
 │       ├── ui.types.ts
 │       ├── ipc.types.ts
 │       ├── guards.ts
-│       └── __tests__/        # Testes de tipos
+│       └── __tests__/        # Type tests
 ├── .webpack/                 # Build output
-├── out/                      # Builds de distribuição
+├── out/                      # Distribution builds
 └── package.json
 ```
 
-## 🔒 Segurança
+## Security
 
-O Hera Browser implementa várias camadas de segurança:
+Hera Browser implements multiple security layers:
 
-- **Compartimentalização de Preload** - Sites externos não têm acesso a APIs privilegiadas
-- **Context Isolation** - Isolamento completo entre processos
-- **Type Safety** - 100% TypeScript com validação em tempo de compilação
-- **Validação de Dados** - Type guards para dados do banco de dados
-- **Princípio do Menor Privilégio** - Cada componente tem apenas as permissões necessárias
+- **Preload Compartmentalization** - External sites cannot access privileged browser APIs
+- **Context Isolation** - Complete isolation between processes
+- **Type Safety** - 100% TypeScript with compile-time validation
+- **Data Validation** - Type guards for database operations
+- **Least Privilege Principle** - Each component has only necessary permissions
 
-Veja [SECURITY_PRELOAD.md](SECURITY_PRELOAD.md) para mais detalhes.
+See [SECURITY_PRELOAD.md](SECURITY_PRELOAD.md) for detailed information.
 
-## 📝 Changelog
+## Changelog
 
-### v2.0.4 (2025-11-03)
-- 🎨 **POLISH UPDATE** - UI/UX completamente refinada
-- ✨ Sistema de variáveis CSS (30+ variáveis)
-- ✨ Animações aprimoradas e transições suaves
-- ✨ Efeitos de hover elegantes em todos os elementos
-- 🧹 Código CSS limpo e organizado (-100 linhas)
-- ⚡ Performance otimizada (GPU-accelerated)
+### v2.0.5 (2025-11-05)
+- Find in Page functionality with Ctrl+F
+- Real-time search with debounce optimization
+- Result counter and navigation controls
+- Tab isolation and state persistence
+- Performance improvements and memory leak fixes
+
+### v2.0.4 (2025-11-04)
+- Complete UI/UX refinement
+- CSS variable system (30+ variables)
+- Enhanced animations and transitions
+- Improved hover effects
+- Code cleanup and optimization
 
 ### v2.0.3 (2025-11-03)
-- 🐛 **CORREÇÃO CRÍTICA** - Protocolo hera:// agora funciona corretamente
-- 🌐 **WhatsApp Web** - Sessão persistente implementada
-- ⚡ Navegação interna otimizada
-- 🔧 User Agent configurado globalmente
+- Fixed hera:// protocol handling
+- Implemented persistent session for WhatsApp Web
+- Optimized internal navigation
+- Global User Agent configuration
 
 ### v2.0.2 (2025-11-03)
-- ✨ Barra de favoritos funcional com visualização
-- 🎨 Design moderno com favicons e animações
-- ⚡ Atualização em tempo real
+- Functional favorites bar with visualization
+- Modern design with favicons
+- Real-time updates
 
 ### v2.0.1 (2025-11-03)
-- 🔒 **CORREÇÃO CRÍTICA DE SEGURANÇA** - Compartimentalização de preload
-- 📜 Página dedicada de histórico (`hera://history`)
-- 📥 Página dedicada de downloads (`hera://downloads`)
-- 🔔 Sistema de notificações de download
-- 📊 100% TypeScript type coverage
+- Critical security fix: Preload compartmentalization
+- Dedicated history page (hera://history)
+- Dedicated downloads page (hera://downloads)
+- Download notification system
+- 100% TypeScript type coverage
 
 ### v2.0.0 (2025)
-- 🔖 Sistema completo de favoritos com pastas
-- 🔍 Omnibox inteligente com sugestões
-- ⌨️ Atalhos de teclado avançados
-- 📱 Persistência de abas
-- 🎨 Interface moderna
+- Complete bookmark system with folders
+- Smart omnibox with suggestions
+- Advanced keyboard shortcuts
+- Tab persistence
+- Modern interface
 
-Veja [CHANGELOG.md](CHANGELOG.md) para histórico completo.
+For complete version history, see [CHANGELOG.md](CHANGELOG.md).
 
-## 🤝 Contribuindo
+## Contributing
 
-Contribuições são bem-vindas! Sinta-se livre para:
+Contributions are welcome. To contribute:
 
-1. Fazer Fork do projeto
-2. Criar uma branch para sua feature (`git checkout -b feature/AmazingFeature`)
-3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
-4. Push para a branch (`git push origin feature/AmazingFeature`)
-5. Abrir um Pull Request
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/NewFeature`)
+3. Commit your changes (`git commit -m 'Add NewFeature'`)
+4. Push to the branch (`git push origin feature/NewFeature`)
+5. Open a Pull Request
 
-### Diretrizes de Desenvolvimento
+### Development Guidelines
 
-- Mantenha 100% de cobertura de tipos TypeScript
-- Siga os padrões de código existentes
-- Adicione testes de tipos quando aplicável
-- Documente novas funcionalidades
-- Teste em diferentes cenários antes de submeter
+- Maintain 100% TypeScript type coverage
+- Follow existing code patterns and conventions
+- Add type tests when applicable
+- Document new features thoroughly
+- Test across different scenarios before submitting
 
-## 📄 Licença
+## License
 
-Este projeto está sob a licença MIT. Veja o arquivo `LICENSE` para mais detalhes.
+This project is licensed under the MIT License. See the `LICENSE` file for details.
 
-## 👨‍💻 Autor
+## Author
 
 **Knowkill**
 
-- GitHub: [@LXrdKnowkill](https://github.com/LXrdKnowkill)
+GitHub: [@LXrdKnowkill](https://github.com/LXrdKnowkill)
 
-## 🙏 Agradecimentos
+## Acknowledgments
 
-- Equipe do Electron pelo framework incrível
-- Comunidade open source
-- Todos os contribuidores
+- Electron team for the framework
+- Open source community
+- All contributors
 
-## 📚 Documentação Adicional
+## Additional Documentation
 
-- [SECURITY_PRELOAD.md](SECURITY_PRELOAD.md) - Documentação de segurança
-- [TYPE_TESTS_EXPLAINED.md](TYPE_TESTS_EXPLAINED.md) - Explicação dos testes de tipos
-- [DOWNLOAD_NOTIFICATIONS.md](DOWNLOAD_NOTIFICATIONS.md) - Sistema de notificações
-- [PAGES_CREATION_SUMMARY.md](PAGES_CREATION_SUMMARY.md) - Páginas dedicadas
+- [SECURITY_PRELOAD.md](SECURITY_PRELOAD.md) - Security documentation
+- [TYPE_TESTS_EXPLAINED.md](TYPE_TESTS_EXPLAINED.md) - Type testing explanation
+- [DOWNLOAD_NOTIFICATIONS.md](DOWNLOAD_NOTIFICATIONS.md) - Notification system
+- [CHANGELOG.md](CHANGELOG.md) - Complete version history
 
 ---
 
-⭐ Se você gostou do projeto, considere dar uma estrela no repositório!
-
-**Parte do ecossistema HikariSystem** 🌟
+Part of the HikariSystem ecosystem

@@ -34,7 +34,9 @@ window.addEventListener('DOMContentLoaded', () => {
   // ========================================// ELEMENTOS DA UI// ========================================
   const tabBar = document.getElementById('tab-bar')!;
   const navBar = document.getElementById('nav-bar')!;
+  const favoritesBarWrapper = document.getElementById('favorites-bar-wrapper') as HTMLDivElement;
   const favoritesBar = document.getElementById('favorites-bar') as HTMLDivElement;
+  const favoritesBarCloseBtn = document.getElementById('favorites-bar-close') as HTMLButtonElement;
   const addTabBtn = document.getElementById('add-tab-btn')!;
   const backBtn = document.getElementById('back-btn') as HTMLButtonElement;
   const forwardBtn = document.getElementById('forward-btn') as HTMLButtonElement;
@@ -93,9 +95,24 @@ window.addEventListener('DOMContentLoaded', () => {
   const closeHistoryPageBtn = document.getElementById('close-history-page-btn')!;
   const clearHistoryBtn = document.getElementById('clear-history-btn')!;
 
+  // Find in Page
+  const findBar = document.getElementById('find-bar')!;
+  const findInput = document.getElementById('find-input') as HTMLInputElement;
+  const findResults = document.getElementById('find-results')!;
+  const findPrevBtn = document.getElementById('find-prev')!;
+  const findNextBtn = document.getElementById('find-next')!;
+  const findCloseBtn = document.getElementById('find-close')!;
+
   // ========================================// ESTADO DA APLICAÇÃO// ========================================
   let activeTabId: string | null = null;
   const tabsOrder: string[] = [];
+  
+  // Find in Page state - agora por aba
+  interface TabFindState {
+    isVisible: boolean;
+    text: string;
+  }
+  const tabFindStates = new Map<string, TabFindState>();
 
   // ========================================
   // BARRA DE FAVORITOS
@@ -103,9 +120,10 @@ window.addEventListener('DOMContentLoaded', () => {
   
   /**
    * Renderiza a barra de favoritos com os bookmarks salvos
+   * Nota: Esta função apenas atualiza o conteúdo, não controla visibilidade
    */
   async function renderFavoritesBar() {
-    if (!favoritesBar) {
+    if (!favoritesBar || !favoritesBarWrapper) {
       console.error('[Favorites] Elemento não encontrado');
       return;
     }
@@ -121,7 +139,8 @@ window.addEventListener('DOMContentLoaded', () => {
       console.log(`[Favorites] ${validBookmarks.length} favoritos encontrados`);
       
       if (validBookmarks.length === 0) {
-        favoritesBar.style.display = 'none';
+        // Se não há favoritos, apenas limpa o conteúdo
+        // Não altera a visibilidade da barra
         return;
       }
       
@@ -146,8 +165,29 @@ window.addEventListener('DOMContentLoaded', () => {
         textSpan.textContent = bookmark.title || bookmark.url;
         link.appendChild(textSpan);
         
+        // Botão de remover
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'favorite-remove-btn';
+        removeBtn.innerHTML = '×';
+        removeBtn.title = 'Remover favorito';
+        removeBtn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          try {
+            await window.heraAPI.removeBookmark(bookmark.id);
+            await renderFavoritesBar();
+          } catch (error: unknown) {
+            console.error('[Favorites] Erro ao remover:', error);
+          }
+        });
+        link.appendChild(removeBtn);
+        
         link.addEventListener('click', (e) => {
           e.preventDefault();
+          // Não navega se clicou no botão de remover
+          if ((e.target as HTMLElement).classList.contains('favorite-remove-btn')) {
+            return;
+          }
           window.heraAPI.navigateTo(bookmark.url);
         });
         
@@ -155,11 +195,10 @@ window.addEventListener('DOMContentLoaded', () => {
       });
       
       favoritesBar.appendChild(fragment);
-      favoritesBar.style.display = 'flex';
+      // Não altera a visibilidade aqui - deixa o usuário controlar com Ctrl+B
       
     } catch (error) {
       console.error('[Favorites] Erro:', error);
-      favoritesBar.style.display = 'none';
     }
   }
 
@@ -248,6 +287,8 @@ window.addEventListener('DOMContentLoaded', () => {
     if (index > -1) {
       tabsOrder.splice(index, 1);
     }
+    // Limpa o estado de busca da aba fechada
+    tabFindStates.delete(id);
   };
 
   const updateTabInfo = (id: string, info: TabUpdateInfo) => {
@@ -522,6 +563,167 @@ window.addEventListener('DOMContentLoaded', () => {
     historyPage.classList.add('hidden');
   };
 
+  // ========================================
+  // FIND IN PAGE FUNCTIONS
+  // ========================================
+  
+  /**
+   * Salva o estado de busca da aba atual
+   */
+  function saveFindState() {
+    if (!activeTabId) return;
+    
+    const isVisible = !findBar.classList.contains('hidden');
+    tabFindStates.set(activeTabId, {
+      isVisible,
+      text: findInput.value.trim()
+    });
+  }
+
+  /**
+   * Restaura o estado de busca da aba atual
+   */
+  function restoreFindState() {
+    if (!activeTabId) return;
+    
+    const state = tabFindStates.get(activeTabId);
+    
+    if (state && state.isVisible) {
+      // Restaura a barra visível com o texto
+      findBar.classList.remove('hidden');
+      findInput.value = state.text;
+      
+      // Reinicia a busca se houver texto
+      if (state.text) {
+        window.heraAPI.send('find:start', { text: state.text });
+      } else {
+        findResults.textContent = '0 de 0';
+        findInput.classList.remove('no-results');
+      }
+    } else {
+      // Esconde a barra
+      findBar.classList.add('hidden');
+      findInput.value = '';
+      findResults.textContent = '0 de 0';
+      findInput.classList.remove('no-results');
+    }
+  }
+
+  /**
+   * Exibe a barra de busca e foca o input
+   */
+  function showFindBar() {
+    findBar.classList.remove('hidden');
+    findInput.focus();
+    findInput.select();
+    saveFindState();
+    window.heraAPI.send('find-bar-visibility', true);
+  }
+
+  /**
+   * Fecha a barra de busca e limpa o estado
+   */
+  function closeFindBar() {
+    findBar.classList.add('hidden');
+    window.heraAPI.send('find:stop');
+    findInput.value = '';
+    findResults.textContent = '0 de 0';
+    findInput.classList.remove('no-results');
+    saveFindState();
+    window.heraAPI.send('find-bar-visibility', false);
+  }
+
+  /**
+   * Handler para busca em tempo real com debounce
+   */
+  let findDebounceTimer: NodeJS.Timeout | null = null;
+  
+  findInput.addEventListener('input', () => {
+    const text = findInput.value.trim();
+    saveFindState(); // Salva o estado ao digitar
+    
+    // Cancela busca anterior se ainda não executou
+    if (findDebounceTimer) {
+      clearTimeout(findDebounceTimer);
+    }
+    
+    if (text.length > 0) {
+      // Aguarda 150ms após parar de digitar para buscar
+      findDebounceTimer = setTimeout(() => {
+        window.heraAPI.send('find:start', { text });
+        findDebounceTimer = null;
+      }, 150);
+    } else {
+      window.heraAPI.send('find:stop');
+      findResults.textContent = '0 de 0';
+      findInput.classList.remove('no-results');
+    }
+  });
+
+  /**
+   * Navegação com botões Anterior/Próximo
+   */
+  findPrevBtn.addEventListener('click', () => {
+    const text = findInput.value.trim();
+    if (text) {
+      window.heraAPI.send('find:next', { text, forward: false });
+    }
+  });
+
+  findNextBtn.addEventListener('click', () => {
+    const text = findInput.value.trim();
+    if (text) {
+      window.heraAPI.send('find:next', { text, forward: true });
+    }
+  });
+
+  /**
+   * Navegação com Enter/Shift+Enter no input
+   */
+  findInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation(); // Impede que o evento chegue ao listener global
+      const text = findInput.value.trim();
+      if (text) {
+        const forward = !e.shiftKey;
+        window.heraAPI.send('find:next', { 
+          text, 
+          forward 
+        });
+      }
+    }
+  });
+
+  /**
+   * Fechar barra com botão X
+   */
+  findCloseBtn.addEventListener('click', closeFindBar);
+
+  /**
+   * Atualizar contador de resultados
+   */
+  window.heraAPI.on('find:result', (result: { 
+    activeMatchOrdinal: number; 
+    matches: number;
+    finalUpdate: boolean;
+  }) => {
+    if (result.matches === 0) {
+      findResults.textContent = '0 de 0';
+      findInput.classList.add('no-results');
+    } else {
+      findResults.textContent = `${result.activeMatchOrdinal} de ${result.matches}`;
+      findInput.classList.remove('no-results');
+    }
+  });
+
+  /**
+   * Restaurar estado ao trocar de aba
+   */
+  window.heraAPI.on('find:restore-state', () => {
+    restoreFindState();
+  });
+
   // ========================================// ATALHOS DE TECLADO AVANÇADOS (v2.0.0)// ========================================
   document.addEventListener('keydown', (e) => {
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
@@ -581,8 +783,15 @@ window.addEventListener('DOMContentLoaded', () => {
         case 'f':
           if (!shift) {
             e.preventDefault();
-            // Busca rápida na página - será implementado
+            showFindBar();
           }
+          break;
+        case 'b':
+          e.preventDefault();
+          // Mostrar/ocultar barra de favoritos
+          favoritesBarWrapper.classList.toggle('hidden');
+          const isHidden = favoritesBarWrapper.classList.contains('hidden');
+          window.heraAPI.send('favorites-bar-visibility', isHidden);
           break;
         // Ctrl+1-9: Navegar para aba específica
         case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
@@ -622,6 +831,10 @@ window.addEventListener('DOMContentLoaded', () => {
     
     // Escape: Fechar modais/painéis
     if (e.key === 'Escape') {
+      // Fecha a barra de busca se estiver visível
+      if (!findBar.classList.contains('hidden')) {
+        closeFindBar();
+      }
       historyPage.classList.add('hidden');
       downloadsPanel.classList.add('hidden');
       urlInput.blur();
@@ -636,6 +849,12 @@ window.addEventListener('DOMContentLoaded', () => {
   minBtn.addEventListener('click', () => window.heraAPI.windowMinimize());
   maxBtn.addEventListener('click', () => window.heraAPI.windowMaximize());
   closeBtn.addEventListener('click', () => window.heraAPI.windowClose());
+  
+  // Botão de fechar barra de favoritos
+  favoritesBarCloseBtn.addEventListener('click', () => {
+    favoritesBarWrapper.classList.add('hidden');
+    window.heraAPI.send('favorites-bar-visibility', true); // true = hidden
+  });
 
   // Omnibox agora é um BrowserView separado - não precisa mais de renderSuggestions aqui
 
@@ -786,6 +1005,9 @@ window.addEventListener('DOMContentLoaded', () => {
         bookmarkBtn.classList.add('active');
         console.log('[Bookmark] Favorito adicionado, atualizando barra...');
         await renderFavoritesBar();
+        // Mostra a barra de favoritos quando adicionar um favorito
+        favoritesBarWrapper.classList.remove('hidden');
+        window.heraAPI.send('favorites-bar-visibility', false); // false = visible
       }
       
     } catch (error: unknown) {
@@ -1061,11 +1283,12 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // ========================================// INICIALIZAÇÃO// ========================================
   
-  // Inicializa a barra de favoritos
+  // Inicializa a barra de favoritos (começa oculta, como o find bar)
   console.log('[Init] Inicializando barra de favoritos...');
-  favoritesBar.style.display = 'none'; // Garante que começa escondida
+  favoritesBarWrapper.classList.add('hidden'); // Começa oculta
+  // Carrega os favoritos em background, mas mantém oculta
   renderFavoritesBar().then(() => {
-    console.log('[Init] Barra de favoritos inicializada');
+    console.log('[Init] Barra de favoritos inicializada (oculta)');
   }).catch(err => {
     console.error('[Init] Erro ao inicializar barra de favoritos:', err);
   });

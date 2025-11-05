@@ -630,21 +630,62 @@ body {
 /* ========================================
    FAVORITES BAR
    ======================================== */
-#favorites-bar {
-    display: none;
-    align-items: center;
-    min-height: 36px;
+.favorites-bar-wrapper {
+    display: none; /* Oculta por padrão */
+    position: relative;
     background-color: var(--bg-primary);
-    padding: 6px 20px;
     border-bottom: 1px solid var(--border-primary);
+    flex-shrink: 0;
+}
+
+.favorites-bar-wrapper:not(.hidden) {
+    display: flex; /* Mostra apenas quando NÃO tem .hidden */
+}
+
+#favorites-bar {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 8px 20px;
+    padding-right: 50px; /* Espaço para o botão X */
     font-size: 13px;
     color: var(--text-tertiary);
     gap: 12px;
     overflow-x: auto;
     overflow-y: hidden;
-    flex-shrink: 0;
+    flex: 1;
     position: relative;
     z-index: 1;
+}
+
+.favorites-bar-close-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--text-tertiary);
+    font-size: 24px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
+    z-index: 2;
+    -webkit-app-region: no-drag;
+}
+
+.favorites-bar-close-btn:hover {
+    background-color: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.favorites-bar-close-btn:active {
+    transform: translateY(-50%) scale(0.95);
 }
 
 #favorites-bar::-webkit-scrollbar {
@@ -669,7 +710,8 @@ body {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 6px 14px;
+    padding: 7px 12px;
+    padding-right: 8px;
     background: var(--bg-tertiary);
     border-radius: 8px;
     color: var(--text-primary);
@@ -681,7 +723,8 @@ body {
     border: 1px solid transparent;
     flex-shrink: 0;
     min-width: auto;
-    max-width: 200px;
+    max-width: 250px;
+    position: relative;
 }
 
 .favorite-item:hover {
@@ -713,6 +756,149 @@ body {
     white-space: nowrap;
     flex: 1;
     min-width: 0;
+}
+
+.favorite-remove-btn {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    margin-left: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 4px;
+    color: var(--text-tertiary);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    flex-shrink: 0;
+}
+
+.favorite-item:hover .favorite-remove-btn {
+    display: flex;
+}
+
+.favorite-remove-btn:hover {
+    background: var(--accent-danger);
+    color: white;
+    transform: scale(1.1);
+}
+
+.favorite-remove-btn:active {
+    transform: scale(0.95);
+}
+
+/* ========================================
+   FIND BAR
+   ======================================== */
+.find-bar {
+    display: none;
+    align-items: center;
+    height: 40px;
+    background-color: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-primary);
+    padding: 0 var(--spacing-lg);
+    position: relative;
+    z-index: 10;
+    -webkit-app-region: no-drag;
+}
+
+.find-bar:not(.hidden) {
+    display: flex;
+}
+
+.find-bar-content {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    width: 100%;
+    max-width: 600px;
+}
+
+#find-input {
+    flex: 1;
+    background-color: var(--bg-hover);
+    border: 2px solid transparent;
+    border-radius: var(--radius-md);
+    padding: var(--spacing-sm) var(--spacing-md);
+    color: var(--text-primary);
+    font-size: 13px;
+    outline: none;
+    transition: all var(--transition-normal);
+    min-width: 200px;
+}
+
+#find-input:focus {
+    border-color: var(--accent-primary);
+    box-shadow: var(--shadow-focus);
+    background-color: #404040;
+}
+
+#find-input.no-results {
+    border-color: var(--accent-danger);
+    background-color: rgba(255, 68, 68, 0.1);
+}
+
+.find-results {
+    color: var(--text-tertiary);
+    font-size: 12px;
+    font-weight: 500;
+    min-width: 60px;
+    text-align: center;
+    user-select: none;
+}
+
+.find-nav-btn {
+    background: none;
+    border: none;
+    color: var(--text-tertiary);
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.find-nav-btn:hover {
+    background-color: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.find-nav-btn:active {
+    transform: scale(0.95);
+}
+
+.find-nav-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+.find-close-btn {
+    background: none;
+    border: none;
+    color: var(--text-tertiary);
+    font-size: 20px;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    line-height: 1;
+    margin-left: var(--spacing-sm);
+}
+
+.find-close-btn:hover {
+    background-color: var(--bg-hover);
+    color: var(--text-primary);
+    transform: rotate(90deg);
 }
 
 /* ========================================

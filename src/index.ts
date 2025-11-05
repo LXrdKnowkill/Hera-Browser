@@ -35,12 +35,14 @@ declare const PRELOAD_WEB_WEBPACK_ENTRY: string;
 // Constantes
 const TAB_BAR_HEIGHT = 40;
 const NAV_BAR_HEIGHT = 50;
-const FAVORITES_BAR_HEIGHT = 36;
-let isFavoritesBarHidden = false;
+const FAVORITES_BAR_HEIGHT = 44;
+const FIND_BAR_HEIGHT = 40;
+let isFavoritesBarHidden = true; // Começa oculta por padrão
+let isFindBarVisible = false;
 
 // Função para calcular altura da UI dinamicamente
 function getUIHeight(): number {
-  return TAB_BAR_HEIGHT + NAV_BAR_HEIGHT + (isFavoritesBarHidden ? 0 : FAVORITES_BAR_HEIGHT);
+  return TAB_BAR_HEIGHT + NAV_BAR_HEIGHT + (isFavoritesBarHidden ? 0 : FAVORITES_BAR_HEIGHT) + (isFindBarVisible ? FIND_BAR_HEIGHT : 0);
 }
 
 /**
@@ -104,14 +106,26 @@ const switchToTab = (id: string) => {
   if (!tabs.has(id)) return;
   if (activeTabId && tabs.has(activeTabId)) {
     const oldView = tabs.get(activeTabId);
-    if (oldView) mainWindow.removeBrowserView(oldView);
+    if (oldView) {
+      // Para a busca na aba anterior ao trocar
+      oldView.webContents.stopFindInPage('clearSelection');
+      mainWindow.removeBrowserView(oldView);
+    }
   }
   const view = tabs.get(id);
   if (!view) return;
   mainWindow.setBrowserView(view);
   activeTabId = id;
   resizeActiveTab();
+  
+  // Envia tab-switched primeiro para atualizar activeTabId no renderer
   mainWindow.webContents.send('tab-switched', id, view.webContents.getURL());
+  
+  // Depois restaura o estado da barra de busca (precisa do activeTabId atualizado)
+  // Usa setImmediate para garantir que tab-switched foi processado
+  setImmediate(() => {
+    mainWindow.webContents.send('find:restore-state');
+  });
 };
 
 // --- MUDANÇA v2.2 ---
@@ -452,11 +466,29 @@ const createNewTab = (url: string | undefined = undefined) => {
     }
   });
 
+  // Find in page listener
+  view.webContents.on('found-in-page', (_event, result) => {
+    // Só envia resultado se esta aba for a ativa
+    if (activeTabId === id) {
+      mainWindow.webContents.send('find:result', {
+        activeMatchOrdinal: result.activeMatchOrdinal,
+        matches: result.matches,
+        finalUpdate: result.finalUpdate
+      });
+    }
+  });
+
 };
 
 const closeTab = (id: string) => {
   if (!tabs.has(id)) return;
   const view = tabs.get(id);
+  
+  // Para qualquer busca ativa antes de fechar
+  if (view && view.webContents) {
+    view.webContents.stopFindInPage('clearSelection');
+  }
+  
   mainWindow.removeBrowserView(view);
   tabs.delete(id);
   tabInfo.delete(id); // Remove info da aba também
@@ -837,6 +869,68 @@ app.whenReady().then(async () => {
     };
   });
 
+  // Find in page handlers
+  ipcMain.on('find:start', (_event, args: { text: string }) => {
+    if (!activeTabId || !tabs.has(activeTabId)) {
+      console.error('Nenhuma aba ativa para busca');
+      return;
+    }
+
+    const view = tabs.get(activeTabId);
+    if (!view) return;
+
+    // Valida input
+    if (typeof args.text !== 'string' || args.text.trim().length === 0) {
+      console.error('Texto de busca inválido');
+      return;
+    }
+
+    // Inicia busca
+    view.webContents.findInPage(args.text, {
+      findNext: false,
+      forward: true
+    });
+  });
+
+  ipcMain.on('find:next', (_event, args: { text: string; forward: boolean }) => {
+    if (!activeTabId || !tabs.has(activeTabId)) {
+      console.error('Nenhuma aba ativa para navegação');
+      return;
+    }
+
+    const view = tabs.get(activeTabId);
+    if (!view) return;
+
+    // Valida input
+    if (typeof args.text !== 'string' || args.text.trim().length === 0) {
+      console.error('Texto de busca inválido');
+      return;
+    }
+
+    if (typeof args.forward !== 'boolean') {
+      console.error('Direção de navegação inválida');
+      return;
+    }
+
+    // Navega para próximo/anterior
+    view.webContents.findInPage(args.text, {
+      findNext: true,
+      forward: args.forward
+    });
+  });
+
+  ipcMain.on('find:stop', () => {
+    if (!activeTabId || !tabs.has(activeTabId)) {
+      return;
+    }
+
+    const view = tabs.get(activeTabId);
+    if (!view) return;
+
+    // Para busca e limpa seleção
+    view.webContents.stopFindInPage('clearSelection');
+  });
+
   // Handlers temporariamente desabilitados - voltando para solução simples
   ipcMain.on('omnibox:show', () => {
     // Não faz nada por enquanto
@@ -1100,6 +1194,18 @@ app.whenReady().then(async () => {
 
   // Favorites bar visibility handler
   ipcMain.on('favorites-bar-hidden', (_e, hidden: boolean) => {
+    isFavoritesBarHidden = hidden;
+    resizeActiveTab();
+  });
+
+  // Find bar visibility handler
+  ipcMain.on('find-bar-visibility', (_e, visible: boolean) => {
+    isFindBarVisible = visible;
+    resizeActiveTab();
+  });
+
+  // Favorites bar visibility handler
+  ipcMain.on('favorites-bar-visibility', (_e, hidden: boolean) => {
     isFavoritesBarHidden = hidden;
     resizeActiveTab();
   });
