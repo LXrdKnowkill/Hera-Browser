@@ -101,6 +101,9 @@ const heraAPI: HeraAPI = {
   on: (channel: string, callback: GenericCallback) => {
     ipcRenderer.on(channel, (_, ...args) => callback(...args));
   },
+  send: (channel: string, ...args: unknown[]) => {
+    ipcRenderer.send(channel, ...args);
+  },
   hideContent: () => ipcRenderer.send('ui:hide-content'),
   showContent: () => ipcRenderer.send('ui:show-content'),
   onDownloadStarted: (callback: DownloadStartedCallback) => {

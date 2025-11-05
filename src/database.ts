@@ -7,19 +7,49 @@ import type { HistoryEntry, Bookmark, BookmarkFolder, TabState } from './types';
 import { validateBookmarks, validateHistoryEntries } from './types/guards';
 
 // Importação dinâmica do sqlite3 para evitar problemas com webpack
-// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-explicit-any
-const sqlite3 = require('sqlite3') as any;
-
+let sqlite3: any = null;
 let db: any = null;
+
+/**
+ * Carrega o módulo sqlite3
+ */
+const loadSqlite3 = () => {
+  if (sqlite3) return sqlite3;
+  
+  try {
+    // Tenta carregar do node_modules normal (desenvolvimento)
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    sqlite3 = require('sqlite3');
+    console.log('sqlite3 carregado do node_modules');
+    return sqlite3;
+  } catch (e) {
+    console.log('Tentando carregar sqlite3 do extraResource...');
+    try {
+      // Se falhar, tenta carregar do extraResource (quando empacotado)
+      const resourcePath = process.resourcesPath;
+      if (resourcePath) {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        sqlite3 = require(path.join(resourcePath, 'sqlite3'));
+        console.log('sqlite3 carregado do extraResource:', path.join(resourcePath, 'sqlite3'));
+        return sqlite3;
+      }
+    } catch (e2) {
+      console.error('Erro ao carregar sqlite3 do extraResource:', e2);
+    }
+    throw e;
+  }
+};
 
 /**
  * Inicializa o banco de dados SQLite
  */
 export const initDatabase = (): Promise<void> => {
   return new Promise((resolve, reject) => {
-    const dbPath = path.join(app.getPath('userData'), 'hera-browser.db');
-    
-    db = new (sqlite3 as typeof import('sqlite3')).Database(dbPath, (err: Error | null) => {
+    try {
+      const sqlite3Module = loadSqlite3();
+      const dbPath = path.join(app.getPath('userData'), 'hera-browser.db');
+      
+      db = new sqlite3Module.Database(dbPath, (err: Error | null) => {
       if (err) {
         console.error('Erro ao abrir banco de dados:', err);
         reject(err);
@@ -128,7 +158,11 @@ export const initDatabase = (): Promise<void> => {
           });
         });
       });
-    });
+      }); // Fecha o callback do new Database
+    } catch (error) {
+      console.error('Erro ao inicializar banco de dados:', error);
+      reject(error);
+    }
   });
 };
 

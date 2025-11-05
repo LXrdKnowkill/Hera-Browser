@@ -718,8 +718,10 @@ window.addEventListener('DOMContentLoaded', () => {
     
     if (visibleCount === 0 && query.length > 0) {
       historyEmpty.classList.remove('hidden');
-      historyEmpty.querySelector('p')?.textContent = 'Nenhum resultado encontrado';
-      historyEmpty.querySelector('span')?.textContent = 'Tente uma busca diferente';
+      const p = historyEmpty.querySelector('p');
+      if (p) p.textContent = 'Nenhum resultado encontrado';
+      const span = historyEmpty.querySelector('span');
+      if (span) span.textContent = 'Tente uma busca diferente';
     } else {
       historyEmpty.classList.add('hidden');
     }
@@ -959,7 +961,9 @@ window.addEventListener('DOMContentLoaded', () => {
       if (totalBytes > 0) {
         const percent = Math.min((data.receivedBytes / totalBytes) * 100, 100);
         progressBar.style.width = `${percent}%`;
-        statusSpan?.textContent = `${(data.receivedBytes / 1024 / 1024).toFixed(2)} MB / ${(totalBytes / 1024 / 1024).toFixed(2)} MB`;
+        if (statusSpan) {
+          statusSpan.textContent = `${(data.receivedBytes / 1024 / 1024).toFixed(2)} MB / ${(totalBytes / 1024 / 1024).toFixed(2)} MB`;
+        }
       }
     }
   });

@@ -66,12 +66,11 @@ const getPreloadForUrl = (url: string): string => {
 let mainWindow: BrowserWindow;
 const tabs = new Map<string, BrowserView>();
 const tabInfo = new Map<string, { url: string; title: string; favicon?: string }>(); // Armazena info das abas para persistência
-let activeTabId: string = null;
+let activeTabId: string | null = null;
 let menuView: BrowserView;
 let isMenuVisible = false;
 let dynamicMenuHeight = 250; // Default or approximated height
 let omniboxView: BrowserView;
-const isOmniboxVisible = false;
 
 // --- Histórico ---
 // Agora usando SQLite através do módulo database.ts
@@ -94,6 +93,7 @@ if (require('electron-squirrel-startup')) {
 const resizeActiveTab = () => {
   if (activeTabId && tabs.has(activeTabId)) {
     const activeView = tabs.get(activeTabId);
+    if (!activeView) return;
     const [width, height] = mainWindow.getContentSize();
     const uiHeight = getUIHeight();
     activeView.setBounds({ x: 0, y: uiHeight, width: width, height: height - uiHeight });
@@ -103,9 +103,11 @@ const resizeActiveTab = () => {
 const switchToTab = (id: string) => {
   if (!tabs.has(id)) return;
   if (activeTabId && tabs.has(activeTabId)) {
-    mainWindow.removeBrowserView(tabs.get(activeTabId));
+    const oldView = tabs.get(activeTabId);
+    if (oldView) mainWindow.removeBrowserView(oldView);
   }
   const view = tabs.get(id);
+  if (!view) return;
   mainWindow.setBrowserView(view);
   activeTabId = id;
   resizeActiveTab();
@@ -618,7 +620,11 @@ app.whenReady().then(async () => {
       const url = new URL(request.url);
       const host = url.hostname;
       const pathname = url.pathname;
-      const appPath = path.join(app.getAppPath(), 'src');
+      // Quando empacotado, os arquivos estão em .webpack/main dentro do asar
+      // Quando em desenvolvimento, estão em src
+      const appPath = app.isPackaged 
+        ? path.join(app.getAppPath(), '.webpack', 'main')
+        : path.join(app.getAppPath(), 'src');
 
       if (host === 'navigate-from-newtab') {
         const targetUrl = url.searchParams.get('url');
@@ -696,17 +702,46 @@ app.whenReady().then(async () => {
         }
       }
       // --- FIM DA MUDANÇA ---
+      // Caso especial para arquivos de imagem e outros recursos na raiz
+      else if (host.endsWith('.png') || host.endsWith('.jpg') || host.endsWith('.svg') || host.endsWith('.ico')) {
+        filePath = path.join(appPath, host);
+      }
       else {
         filePath = path.join(appPath, host, pathname);
       }
       filePath = path.normalize(filePath);
+      
+      console.log(`[Protocol Handler] Tentando carregar: ${filePath}`);
+      console.log(`[Protocol Handler] appPath: ${appPath}`);
+      console.log(`[Protocol Handler] host: ${host}`);
+      console.log(`[Protocol Handler] pathname: ${pathname}`);
+      
       if (!filePath.startsWith(appPath)) {
+        console.error(`[Protocol Handler] Access Denied: ${filePath} não começa com ${appPath}`);
         return new Response('Access Denied', { status: 403 });
       }
 
-      if (fs.existsSync(filePath)) {
-        const fileContent = fs.readFileSync(filePath);
-        const mimeType = getMimeType(filePath);
+      // Tenta encontrar o arquivo (case-insensitive se não existir)
+      let finalFilePath = filePath;
+      if (!fs.existsSync(filePath)) {
+        // Tenta buscar o arquivo com case-insensitive
+        const dir = path.dirname(filePath);
+        const fileName = path.basename(filePath);
+        
+        if (fs.existsSync(dir)) {
+          const files = fs.readdirSync(dir);
+          const foundFile = files.find(f => f.toLowerCase() === fileName.toLowerCase());
+          if (foundFile) {
+            finalFilePath = path.join(dir, foundFile);
+            console.log(`[Protocol Handler] Arquivo encontrado com case-insensitive: ${finalFilePath}`);
+          }
+        }
+      }
+
+      if (fs.existsSync(finalFilePath)) {
+        console.log(`[Protocol Handler] Arquivo encontrado: ${finalFilePath}`);
+        const fileContent = fs.readFileSync(finalFilePath);
+        const mimeType = getMimeType(finalFilePath);
         return new Response(fileContent, {
           status: 200,
           headers: { 'Content-Type': mimeType }
@@ -782,7 +817,7 @@ app.whenReady().then(async () => {
     } catch (error: unknown) {
       // ERR_ABORTED (-3) é comum quando o usuário navega rapidamente
       // Não é um erro crítico, apenas log para debug
-      if (error instanceof Error && 'code' in error && error.code === 'ERR_ABORTED') {
+      if (error && typeof error === 'object' && 'code' in error && (error as { code: string }).code === 'ERR_ABORTED') {
         console.log('Navegação cancelada (usuário navegou para outra página)');
       } else {
         console.error('Erro ao navegar:', error);
