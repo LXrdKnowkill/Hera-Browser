@@ -1,5 +1,37 @@
 # Changelog - Hera Browser
 
+## [2.0.4.1] - 2025-11-04
+
+### 🔧 Hotfix - Empacotamento e Build
+
+#### Correções Críticas
+- 🐛 **FIXED: Erro "Cannot find module 'sqlite3'" no build empacotado**
+  - Configurado extraResource para copiar sqlite3 completo
+  - Ajustado ASAR unpack para módulos nativos (*.node, *.dll)
+  - Implementado fallback para carregar sqlite3 do extraResource
+  - Desabilitado OnlyLoadAppFromAsar para permitir módulos externos
+
+- 🐛 **FIXED: Páginas internas (hera://) não carregavam quando empacotado**
+  - Adicionado copy-webpack-plugin para copiar arquivos HTML/CSS/JS/PNG
+  - Ajustado caminho do protocol handler para usar .webpack/main quando empacotado
+  - Implementado detecção automática de ambiente (desenvolvimento vs produção)
+
+- 🐛 **FIXED: Favicon das páginas internas não carregava**
+  - Adicionado suporte para arquivos de imagem na raiz do protocolo hera://
+  - Implementado busca case-insensitive para nomes de arquivo
+  - Corrigido carregamento de HeraBrowser256x256.png
+
+#### Melhorias de Build
+- ✨ Adicionado copy-webpack-plugin como dependência
+- ✨ Logs detalhados no protocol handler para debug
+- ✨ Tratamento de erro melhorado para ERR_ABORTED
+
+#### Limpeza de Código
+- 🧹 Removidos arquivos .bat de desenvolvimento (force-push, quick-commit, release)
+- 🧹 Removidos arquivos .md de documentação temporária
+- 📝 Adicionados guias de release (RELEASE_GUIDE.md, GITHUB_RELEASE_NOTES.md)
+- 📝 Adicionado script build-and-release.bat
+
 ## [2.0.4] - 2025-11-04
 
 ### 🎨 UI/UX Polish
