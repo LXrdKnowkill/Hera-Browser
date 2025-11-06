@@ -14,12 +14,9 @@ import { rendererConfig } from './webpack.renderer.config';
 const config: ForgeConfig = {
   packagerConfig: {
     asar: {
-      unpack: '**/{*.node,*.dll,sqlite3/**}'
+      unpack: '**/*.node'
     },
-    icon: './HeraBrowser.ico',
-    extraResource: [
-      './node_modules/sqlite3'
-    ]
+    icon: './HeraBrowser.ico'
   },
   rebuildConfig: {},
   makers: [

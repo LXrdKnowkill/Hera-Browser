@@ -1259,11 +1259,12 @@ body {
     border: 2px solid var(--accent-primary);
     border-radius: var(--radius-xl);
     box-shadow: var(--shadow-lg);
-    z-index: 999998;
+    z-index: 9999999; /* Aumentado para ficar acima do BrowserView */
     display: flex;
     flex-direction: column;
     overflow: hidden;
     animation: slideDown var(--transition-normal);
+    pointer-events: auto; /* Garante que seja clicável */
 }
 
 #downloads-panel.hidden {

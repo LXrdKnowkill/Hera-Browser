@@ -187,7 +187,12 @@
                 </svg>
                 <h3>Downloads</h3>
             </div>
-            <button id="close-downloads-panel-btn" title="Fechar (Esc)" class="close-btn">×</button>
+            <div style="display: flex; gap: 8px;">
+                <button id="open-downloads-page-btn" title="Abrir página de downloads" style="padding: 6px 12px; background: var(--accent-primary); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">
+                    Ver todos
+                </button>
+                <button id="close-downloads-panel-btn" title="Fechar (Esc)" class="close-btn">×</button>
+            </div>
         </div>
         <div id="downloads-list" class="downloads-list"></div>
         <div id="downloads-empty" class="downloads-empty hidden">

@@ -17,15 +17,7 @@ export const mainConfig: Configuration = {
   resolve: {
     extensions: ['.js', '.ts', '.jsx', '.tsx', '.css', '.json'],
   },
-  externals: [
-    // sqlite3 precisa ser tratado como externo para o webpack não tentar bundlizar
-    ({ request }, callback) => {
-      if (request === 'sqlite3' || request?.startsWith('sqlite3/')) {
-        return callback(null, `commonjs ${request}`);
-      }
-      callback();
-    },
-  ],
+  // Removido externals - deixar o webpack-asset-relocator-loader processar o better-sqlite3
   node: {
     __dirname: false,
     __filename: false,

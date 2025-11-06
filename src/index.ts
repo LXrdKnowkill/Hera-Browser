@@ -14,8 +14,8 @@ import {
   getSetting,
   setSetting,
   getAllSettings,
-  saveOpenTabs,
-  loadOpenTabs,
+  saveTabsState as saveTabsToDatabase,
+  getTabsState as getTabsFromDatabase,
   addBookmark,
   removeBookmark,
   getBookmarks,
@@ -37,11 +37,16 @@ const TAB_BAR_HEIGHT = 40;
 const NAV_BAR_HEIGHT = 50;
 const FAVORITES_BAR_HEIGHT = 44;
 const FIND_BAR_HEIGHT = 40;
-let isFavoritesBarHidden = true; // Começa oculta por padrão
-let isFindBarVisible = false;
 
-// Função para calcular altura da UI dinamicamente
+// Estado da UI
+let isFavoritesBarHidden = true; // Barra de favoritos é global (aparece em todas as abas)
+
+// Estado da barra de busca por aba
+const tabFindBarStates = new Map<string, boolean>(); // tabId -> isVisible
+
+// Função para calcular altura da UI dinamicamente para a aba ativa
 function getUIHeight(): number {
+  const isFindBarVisible = activeTabId ? (tabFindBarStates.get(activeTabId) || false) : false;
   return TAB_BAR_HEIGHT + NAV_BAR_HEIGHT + (isFavoritesBarHidden ? 0 : FAVORITES_BAR_HEIGHT) + (isFindBarVisible ? FIND_BAR_HEIGHT : 0);
 }
 
@@ -58,10 +63,14 @@ function getUIHeight(): number {
 const getPreloadForUrl = (url: string): string => {
   // URLs internas são confiáveis - usam preload privilegiado
   if (url.startsWith('hera://')) {
+    console.log(`[Preload] URL interna detectada: ${url}`);
+    console.log(`[Preload] Usando preload privilegiado: ${MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY}`);
     return MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY;
   }
 
   // URLs externas NÃO são confiáveis - usam preload limitado
+  console.log(`[Preload] URL externa detectada: ${url}`);
+  console.log(`[Preload] Usando preload limitado: ${PRELOAD_WEB_WEBPACK_ENTRY}`);
   return PRELOAD_WEB_WEBPACK_ENTRY;
 };
 
@@ -346,9 +355,11 @@ const createNewTab = (url: string | undefined = undefined) => {
       // Adiciona ao histórico DEPOIS de garantir que temos URL e título
       if (url && !url.startsWith('hera://')) {
         const finalTitle = title || url;
-        addHistoryEntry(url, finalTitle).catch((err: unknown) => {
+        try {
+          addHistoryEntry(url, finalTitle);
+        } catch (err: unknown) {
           console.error('Erro ao adicionar ao histórico:', err);
-        });
+        }
       }
     }
   });
@@ -492,6 +503,7 @@ const closeTab = (id: string) => {
   mainWindow.removeBrowserView(view);
   tabs.delete(id);
   tabInfo.delete(id); // Remove info da aba também
+  tabFindBarStates.delete(id); // Remove estado da barra de busca
   mainWindow.webContents.send('tab-closed', id);
 
   if (activeTabId === id) {
@@ -504,7 +516,22 @@ const closeTab = (id: string) => {
   }
 
   // Salva estado das abas após fechar uma aba
-  saveTabsState().catch((err: unknown) => console.error('Erro ao salvar estado das abas:', err));
+  try {
+    const tabsArray: TabState[] = Array.from(tabs.keys()).map((id, index) => {
+      const info = tabInfo.get(id);
+      return {
+        id,
+        url: info?.url || '',
+        title: info?.title || '',
+        favicon: info?.favicon,
+        position: index,
+        active: id === activeTabId
+      };
+    });
+    saveTabsToDatabase(tabsArray);
+  } catch (err: unknown) {
+    console.error('Erro ao salvar estado das abas:', err);
+  }
 };
 
 // --- Janela Principal ---
@@ -597,10 +624,24 @@ const createWindow = (): void => {
 app.whenReady().then(async () => {
   // Inicializar banco de dados SQLite
   try {
-    await initDatabase();
+    initDatabase(); // Agora é síncrono com better-sqlite3
     console.log('Banco de dados SQLite inicializado');
   } catch (error: unknown) {
-    console.error('Erro ao inicializar banco de dados:', error);
+    console.error('❌ ERRO CRÍTICO ao inicializar banco de dados:', error);
+    if (error instanceof Error) {
+      console.error('Mensagem:', error.message);
+      console.error('Stack:', error.stack);
+    }
+    // Tentar novamente após um delay
+    setTimeout(() => {
+      try {
+        console.log('Tentando inicializar banco novamente...');
+        initDatabase();
+        console.log('✅ Banco inicializado na segunda tentativa');
+      } catch (retryError) {
+        console.error('❌ Falha na segunda tentativa:', retryError);
+      }
+    }, 1000);
   }
 
   // Configurar User Agent global para todas as sessões
@@ -633,6 +674,45 @@ app.whenReady().then(async () => {
 
   webSession.setPermissionRequestHandler((webContents, permission, callback) => {
     callback(allowedPermissions.includes(permission));
+  });
+
+  // --- Gerenciamento de Downloads ---
+  webSession.on('will-download', (event, item, webContents) => {
+    console.log('[Download] Iniciando download:', item.getFilename());
+    
+    // Enviar evento de download iniciado
+    const mainWindow = BrowserWindow.getAllWindows()[0];
+    if (mainWindow) {
+      mainWindow.webContents.send('download-started', {
+        filename: item.getFilename(),
+        savePath: item.getSavePath(),
+        totalBytes: item.getTotalBytes()
+      });
+    }
+
+    // Atualizar progresso
+    item.on('updated', (event, state) => {
+      if (state === 'progressing') {
+        if (mainWindow) {
+          mainWindow.webContents.send('download-progress', {
+            savePath: item.getSavePath(),
+            receivedBytes: item.getReceivedBytes(),
+            totalBytes: item.getTotalBytes()
+          });
+        }
+      }
+    });
+
+    // Download concluído
+    item.once('done', (event, state) => {
+      console.log('[Download] Concluído:', item.getFilename(), 'Estado:', state);
+      if (mainWindow) {
+        mainWindow.webContents.send('download-complete', {
+          savePath: item.getSavePath(),
+          state: state === 'completed' ? 'completed' : 'failed'
+        });
+      }
+    });
   });
 
   // --- Handler do Protocolo (MUDANÇA v2.2) ---
@@ -674,7 +754,7 @@ app.whenReady().then(async () => {
                 }
               } else {
                 // Busca o mecanismo de busca configurado pelo usuário
-                const searchEngine = await getSetting('searchEngine') || 'google';
+                const searchEngine = getSetting('searchEngine') || 'google';
                 const searchEngines: Record<string, string> = {
                   google: `https://www.google.com/search?q=${encodeURIComponent(targetUrl)}`,
                   brave: `https://search.brave.com/search?q=${encodeURIComponent(targetUrl)}`,
@@ -1008,18 +1088,18 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle('window:close', () => mainWindow.close());
 
-  ipcMain.handle('history:get', async (): Promise<HistoryEntry[]> => {
+  ipcMain.handle('history:get', (): HistoryEntry[] => {
     try {
-      const history = await getHistory(1000); // Limite de 1000 entradas mais recentes
+      const history = getHistory(); // Agora é síncrono
       return validateHistoryEntries(history);
     } catch (error: unknown) {
       console.error('Erro ao obter histórico:', error);
       return [];
     }
   });
-  ipcMain.handle('history:clear', async (): Promise<void> => {
+  ipcMain.handle('history:clear', (): void => {
     try {
-      await clearHistory();
+      clearHistory();
     } catch (error: unknown) {
       console.error('Erro ao limpar histórico:', error);
       throw error;
@@ -1034,7 +1114,7 @@ app.whenReady().then(async () => {
         throw new Error('Chave de configuração inválida');
       }
 
-      return await getSetting(key);
+      return getSetting(key);
     } catch (error: unknown) {
       console.error('Erro ao obter configuração:', error);
       return null;
@@ -1051,7 +1131,7 @@ app.whenReady().then(async () => {
         throw new Error('Valor de configuração inválido');
       }
 
-      await setSetting(key, value);
+      setSetting(key, value);
       return true;
     } catch (error: unknown) {
       console.error('Erro ao salvar configuração:', error);
@@ -1059,9 +1139,9 @@ app.whenReady().then(async () => {
     }
   });
 
-  ipcMain.handle('settings:getAll', async (): Promise<Record<string, string>> => {
+  ipcMain.handle('settings:getAll', (): Record<string, string> => {
     try {
-      return await getAllSettings();
+      return getAllSettings();
     } catch (error: unknown) {
       console.error('Erro ao obter todas as configurações:', error);
       return {};
@@ -1085,7 +1165,7 @@ app.whenReady().then(async () => {
         throw new Error('ID da pasta inválido');
       }
 
-      return await addBookmark(url, title, favicon, folderId);
+      return addBookmark(url, title, favicon, folderId);
     } catch (error: unknown) {
       console.error('Erro ao adicionar favorito:', error);
       throw error;
@@ -1099,7 +1179,7 @@ app.whenReady().then(async () => {
         throw new Error('ID inválido');
       }
 
-      await removeBookmark(id);
+      removeBookmark(id);
       return true;
     } catch (error: unknown) {
       console.error('Erro ao remover favorito:', error);
@@ -1114,7 +1194,7 @@ app.whenReady().then(async () => {
         throw new Error('ID da pasta inválido');
       }
 
-      const bookmarks = await getBookmarks(folderId);
+      const bookmarks = getBookmarks(folderId);
       return validateBookmarks(bookmarks);
     } catch (error: unknown) {
       console.error('Erro ao buscar favoritos:', error);
@@ -1129,7 +1209,7 @@ app.whenReady().then(async () => {
         throw new Error('Query de busca inválida');
       }
 
-      const bookmarks = await searchBookmarks(query);
+      const bookmarks = searchBookmarks(query);
       return validateBookmarks(bookmarks);
     } catch (error: unknown) {
       console.error('Erro ao buscar favoritos:', error);
@@ -1147,7 +1227,7 @@ app.whenReady().then(async () => {
         throw new Error('ID da pasta pai inválido');
       }
 
-      return await createBookmarkFolder(name, parentId);
+      return createBookmarkFolder(name, parentId);
     } catch (error: unknown) {
       console.error('Erro ao criar pasta de favoritos:', error);
       throw error;
@@ -1161,7 +1241,7 @@ app.whenReady().then(async () => {
         throw new Error('ID da pasta pai inválido');
       }
 
-      return await getBookmarkFolders(parentId);
+      return getBookmarkFolders(parentId);
     } catch (error: unknown) {
       console.error('Erro ao buscar pastas de favoritos:', error);
       return [];
@@ -1200,8 +1280,10 @@ app.whenReady().then(async () => {
 
   // Find bar visibility handler
   ipcMain.on('find-bar-visibility', (_e, visible: boolean) => {
-    isFindBarVisible = visible;
-    resizeActiveTab();
+    if (activeTabId) {
+      tabFindBarStates.set(activeTabId, visible);
+      resizeActiveTab();
+    }
   });
 
   // Favorites bar visibility handler
@@ -1214,7 +1296,7 @@ app.whenReady().then(async () => {
 
   // Tenta restaurar abas salvas
   try {
-    const savedTabs = await loadOpenTabs();
+    const savedTabs = getTabsFromDatabase();
     if (savedTabs.length > 0) {
       // Restaura as abas salvas
       let activeTabIndex = 0;
@@ -1331,15 +1413,25 @@ const saveTabsState = async () => {
       }
     }
 
-    await saveOpenTabs(tabsArray);
+    saveTabsToDatabase(tabsArray);
   } catch (error: unknown) {
     console.error('Erro ao salvar estado das abas:', error);
   }
 };
 
-app.on('will-quit', async () => {
-  await saveTabsState();
-  await closeDatabase();
+app.on('will-quit', () => {
+  saveTabsToDatabase(Array.from(tabs.keys()).map((id, index) => {
+    const info = tabInfo.get(id);
+    return {
+      id,
+      url: info?.url || '',
+      title: info?.title || '',
+      favicon: info?.favicon,
+      position: index,
+      active: id === activeTabId
+    };
+  }));
+  closeDatabase();
 });
 
 // Aumenta o limite de listeners para evitar warning

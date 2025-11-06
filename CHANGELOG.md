@@ -1,5 +1,67 @@
 # Changelog - Hera Browser
 
+## [2.0.5.1] - 2025-11-06 (Hotfix)
+
+### 🐛 Critical Bug Fixes
+
+#### Memory Leak - Find in Page Listeners
+- **FIXED: Memory leak where `found-in-page` listeners accumulated**
+  - Added proper cleanup of WebContents event listeners when closing tabs
+  - Stored listener references in `tabInfo` for proper removal
+  - Prevents memory growth in long-running sessions with many tabs
+  - Improved overall stability when using find in page frequently
+
+#### Race Condition - Find Bar State Restoration
+- **FIXED: Find bar state restored in wrong tab when switching quickly**
+  - Added 50ms delay before restoring find state after tab switch
+  - Added tab ID validation in `find:restore-state` handler
+  - Prevents search text from appearing in wrong tab
+  - Improved reliability when switching tabs during active search
+
+### 🔧 Technical Improvements
+- Added `TabInfoData` interface with `foundInPageListener` property
+- Improved `switchToTab()` to stop find in previous tab before switching
+- Added tab validation in find input debounce handler
+- Added retry mechanism for favorites bar rendering (up to 2 retries)
+- Improved error handling in favorites bar operations
+
+### 📊 Performance
+- Reduced memory usage when using find in page with many tabs
+- Eliminated listener accumulation in long-running sessions
+- Improved responsiveness when switching tabs during search
+
+### 🐞 Known Issues
+- Downloads show "Cancelado" status even after successful completion (files download correctly)
+- Database not initialized in dev mode (`npm start`) - works in production build
+
+---
+
+## [2.0.5] - 2025-11-05
+
+### 🐛 Critical Bug Fixes
+
+#### SQLite3 Loading in Production Build
+- **FIXED: Database not working in packaged application**
+  - Improved sqlite3 loading with multiple fallback paths
+  - Added detailed logging for troubleshooting
+  - Fixed path resolution for extraResource location
+  - History, bookmarks, and settings now work correctly in production builds
+
+#### Find Bar UI Height Calculation
+- **FIXED: Find bar affecting all tabs instead of just active tab**
+  - Implemented per-tab find bar visibility state
+  - Fixed UI height calculation to use active tab state only
+  - Removed visual artifacts when switching between tabs
+  - Each tab now maintains independent find bar state
+
+### 🔧 Technical Improvements
+- Added `tabFindBarStates` Map for per-tab find bar visibility tracking
+- Improved `getUIHeight()` to calculate based on active tab state
+- Added proper cleanup of find bar state when closing tabs
+- Enhanced sqlite3 module loading with better error messages
+
+---
+
 ## [2.0.5] - 2025-11-05
 
 ### ✨ New Features

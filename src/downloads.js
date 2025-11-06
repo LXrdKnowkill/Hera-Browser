@@ -252,6 +252,25 @@ function loadDownloads() {
     const saved = localStorage.getItem('hera-downloads');
     if (saved) {
       downloads = JSON.parse(saved);
+      
+      // Limpar downloads antigos que ficaram travados em "downloading"
+      // Se o app foi fechado, downloads em progresso devem ser marcados como cancelados
+      let needsSave = false;
+      downloads = downloads.map(download => {
+        if (download.state === 'downloading') {
+          needsSave = true;
+          return {
+            ...download,
+            state: 'cancelled',
+            progress: 0
+          };
+        }
+        return download;
+      });
+      
+      if (needsSave) {
+        saveDownloads();
+      }
       renderDownloads();
     } else {
       emptyState.classList.remove('hidden');
@@ -275,6 +294,7 @@ function openDownloadsFolder() {
 if (window.heraAPI) {
   // Download started
   window.heraAPI.onDownloadStarted((data) => {
+    console.log('[Downloads] Download started:', data);
     const download = {
       id: Date.now().toString(),
       filename: data.filename,
@@ -287,6 +307,7 @@ if (window.heraAPI) {
     downloads.unshift(download);
     renderDownloads();
     saveDownloads();
+    console.log('[Downloads] Download adicionado:', download);
   });
 
   // Download progress
@@ -297,17 +318,25 @@ if (window.heraAPI) {
       download.totalBytes = data.totalBytes;
       download.progress = (data.receivedBytes / data.totalBytes) * 100;
       renderDownloads();
+    } else {
+      console.warn('[Downloads] Progress para download não encontrado:', data.savePath);
+      console.log('[Downloads] Downloads atuais:', downloads.map(d => d.savePath));
     }
   });
 
   // Download complete
   window.heraAPI.onDownloadComplete((data) => {
+    console.log('[Downloads] Download complete:', data);
     const download = downloads.find(d => d.savePath === data.savePath);
     if (download) {
-      download.state = data.state;
+      download.state = data.state || 'completed';
       download.progress = 100;
+      download.receivedBytes = download.totalBytes;
       renderDownloads();
       saveDownloads();
+      console.log('[Downloads] Download atualizado:', download);
+    } else {
+      console.warn('[Downloads] Download não encontrado:', data.savePath);
     }
   });
 }

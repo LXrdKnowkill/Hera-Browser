@@ -58,9 +58,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
 
     const downloadsList = document.getElementById('downloads-list')!;
-
-
     const closeDownloadsPanelBtn = document.getElementById('close-downloads-panel-btn')!;
+    const openDownloadsPageBtn = document.getElementById('open-downloads-page-btn')!;
 
 
   
@@ -747,11 +746,13 @@ window.addEventListener('DOMContentLoaded', () => {
           break;
         case 'j': 
           e.preventDefault(); 
-          downloadsPanel.classList.toggle('hidden'); 
+          // Abre/fecha o painel de downloads
+          downloadsPanel.classList.toggle('hidden');
           break;
         case 'h': 
           e.preventDefault();
-          historyPage.classList.contains('hidden') ? showHistoryPage() : hideHistoryPage();
+          // Abre página de histórico em nova aba
+          window.heraAPI.createNewTab('hera://history');
           break;
         case 'l': 
           e.preventDefault(); 
@@ -906,6 +907,12 @@ window.addEventListener('DOMContentLoaded', () => {
   
   // Painel de Downloads (mantido para notificações rápidas)
   closeDownloadsPanelBtn.addEventListener('click', () => downloadsPanel.classList.add('hidden'));
+  
+  // Botão para abrir página completa de downloads
+  openDownloadsPageBtn.addEventListener('click', () => {
+    downloadsPanel.classList.add('hidden');
+    window.heraAPI.createNewTab('hera://downloads');
+  });
 
 
 

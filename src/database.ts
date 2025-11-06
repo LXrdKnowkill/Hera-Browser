@@ -1,660 +1,483 @@
 // External dependencies
 import path from 'path';
 import { app } from 'electron';
+import Database from 'better-sqlite3';
 
 // Types
 import type { HistoryEntry, Bookmark, BookmarkFolder, TabState } from './types';
 import { validateBookmarks, validateHistoryEntries } from './types/guards';
 
-// Importação dinâmica do sqlite3 para evitar problemas com webpack
-let sqlite3: any = null;
-let db: any = null;
-
-/**
- * Carrega o módulo sqlite3
- */
-const loadSqlite3 = () => {
-  if (sqlite3) return sqlite3;
-  
-  try {
-    // Tenta carregar do node_modules normal (desenvolvimento)
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    sqlite3 = require('sqlite3');
-    console.log('sqlite3 carregado do node_modules');
-    return sqlite3;
-  } catch (e) {
-    console.log('Tentando carregar sqlite3 do extraResource...');
-    try {
-      // Se falhar, tenta carregar do extraResource (quando empacotado)
-      const resourcePath = process.resourcesPath;
-      if (resourcePath) {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        sqlite3 = require(path.join(resourcePath, 'sqlite3'));
-        console.log('sqlite3 carregado do extraResource:', path.join(resourcePath, 'sqlite3'));
-        return sqlite3;
-      }
-    } catch (e2) {
-      console.error('Erro ao carregar sqlite3 do extraResource:', e2);
-    }
-    throw e;
-  }
-};
+let db: Database.Database | null = null;
 
 /**
  * Inicializa o banco de dados SQLite
  */
-export const initDatabase = (): Promise<void> => {
-  return new Promise((resolve, reject) => {
+export const initDatabase = (): void => {
+  try {
+    console.log('[Database] Iniciando inicialização...');
+    console.log('[Database] Verificando módulo Database:', typeof Database);
+    
+    const userDataPath = app.getPath('userData');
+    const dbPath = path.join(userDataPath, 'hera-browser.db');
+    console.log('[Database] Caminho do banco:', dbPath);
+    console.log('[Database] UserData path:', userDataPath);
+    
+    console.log('[Database] Tentando criar instância do Database...');
+    db = new Database(dbPath);
+    console.log('[Database] ✅ Banco de dados aberto com sucesso');
+
+    // Criar tabela de histórico
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        url TEXT NOT NULL,
+        title TEXT NOT NULL,
+        timestamp INTEGER NOT NULL,
+        visit_count INTEGER DEFAULT 1,
+        favicon TEXT
+      )
+    `);
+
+    // Migração: adicionar coluna favicon se não existir
     try {
-      const sqlite3Module = loadSqlite3();
-      const dbPath = path.join(app.getPath('userData'), 'hera-browser.db');
-      
-      db = new sqlite3Module.Database(dbPath, (err: Error | null) => {
-      if (err) {
-        console.error('Erro ao abrir banco de dados:', err);
-        reject(err);
-        return;
+      const tableInfo = db.prepare("PRAGMA table_info(history)").all() as any[];
+      const hasFavicon = tableInfo.some((col: any) => col.name === 'favicon');
+      if (!hasFavicon) {
+        console.log('[Database] Adicionando coluna favicon à tabela history...');
+        db.exec('ALTER TABLE history ADD COLUMN favicon TEXT');
+        console.log('[Database] ✅ Coluna favicon adicionada');
       }
-
-      // Criar tabela de histórico se não existir
-      // Removemos UNIQUE constraint e usamos lógica no INSERT
-      db!.run(`
-        CREATE TABLE IF NOT EXISTS history (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          url TEXT NOT NULL,
-          title TEXT NOT NULL,
-          timestamp INTEGER NOT NULL,
-          visit_count INTEGER DEFAULT 1
-        )
-      `, (err: Error | null) => {
-        if (err) {
-          console.error('Erro ao criar tabela de histórico:', err);
-          reject(err);
-          return;
-        }
-
-        // Criar índice para melhorar performance de buscas
-        db!.run(`
-          CREATE INDEX IF NOT EXISTS idx_history_timestamp 
-          ON history(timestamp DESC)
-        `, (err: Error | null) => {
-          if (err) {
-            console.warn('Aviso: não foi possível criar índice:', err);
-          }
-
-          // Criar tabela de configurações
-          db!.run(`
-            CREATE TABLE IF NOT EXISTS settings (
-              key TEXT PRIMARY KEY,
-              value TEXT NOT NULL,
-              updated_at INTEGER DEFAULT (strftime('%s', 'now'))
-            )
-          `, (err: Error | null) => {
-            if (err) {
-              console.error('Erro ao criar tabela de configurações:', err);
-              reject(err);
-              return;
-            }
-
-            // Criar tabela de abas abertas (para persistência)
-            db!.run(`
-              CREATE TABLE IF NOT EXISTS open_tabs (
-                id TEXT PRIMARY KEY,
-                url TEXT NOT NULL,
-                title TEXT NOT NULL,
-                favicon TEXT,
-                position INTEGER NOT NULL,
-                active INTEGER DEFAULT 0,
-                created_at INTEGER DEFAULT (strftime('%s', 'now'))
-              )
-            `, (err: Error | null) => {
-              if (err) {
-                console.error('Erro ao criar tabela de abas abertas:', err);
-                reject(err);
-                return;
-              }
-
-              // Criar tabela de favoritos (bookmarks) com suporte a pastas
-              db!.run(`
-                CREATE TABLE IF NOT EXISTS bookmarks (
-                  id TEXT PRIMARY KEY,
-                  url TEXT,
-                  title TEXT NOT NULL,
-                  favicon TEXT,
-                  folder_id TEXT,
-                  position INTEGER DEFAULT 0,
-                  created_at INTEGER DEFAULT (strftime('%s', 'now')),
-                  updated_at INTEGER DEFAULT (strftime('%s', 'now')),
-                  FOREIGN KEY (folder_id) REFERENCES bookmark_folders(id) ON DELETE CASCADE
-                )
-              `, (err: Error | null) => {
-                if (err) {
-                  console.error('Erro ao criar tabela de favoritos:', err);
-                  reject(err);
-                  return;
-                }
-
-                // Criar tabela de pastas de favoritos
-                db!.run(`
-                  CREATE TABLE IF NOT EXISTS bookmark_folders (
-                    id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    parent_id TEXT,
-                    position INTEGER DEFAULT 0,
-                    created_at INTEGER DEFAULT (strftime('%s', 'now')),
-                    FOREIGN KEY (parent_id) REFERENCES bookmark_folders(id) ON DELETE CASCADE
-                  )
-                `, (err: Error | null) => {
-                  if (err) {
-                    console.error('Erro ao criar tabela de pastas de favoritos:', err);
-                    reject(err);
-                    return;
-                  }
-                  console.log('Banco de dados inicializado com sucesso');
-                  resolve();
-                });
-              });
-            });
-          });
-        });
-      });
-      }); // Fecha o callback do new Database
     } catch (error) {
-      console.error('Erro ao inicializar banco de dados:', error);
-      reject(error);
+      console.error('[Database] Erro ao verificar/adicionar coluna favicon:', error);
     }
-  });
+
+    // Criar índice para buscas rápidas
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_history_url ON history(url);
+      CREATE INDEX IF NOT EXISTS idx_history_timestamp ON history(timestamp DESC);
+    `);
+
+    // Criar tabela de abas abertas
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS open_tabs (
+        id TEXT PRIMARY KEY,
+        url TEXT NOT NULL,
+        title TEXT NOT NULL,
+        favicon TEXT,
+        position INTEGER NOT NULL,
+        active INTEGER DEFAULT 0,
+        created_at INTEGER DEFAULT (strftime('%s', 'now'))
+      )
+    `);
+
+    // Criar tabela de favoritos
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS bookmarks (
+        id TEXT PRIMARY KEY,
+        url TEXT,
+        title TEXT NOT NULL,
+        favicon TEXT,
+        folder_id TEXT,
+        position INTEGER DEFAULT 0,
+        created_at INTEGER DEFAULT (strftime('%s', 'now')),
+        updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+      )
+    `);
+
+    // Criar tabela de pastas de favoritos
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS bookmark_folders (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        parent_id TEXT,
+        position INTEGER DEFAULT 0,
+        created_at INTEGER DEFAULT (strftime('%s', 'now'))
+      )
+    `);
+
+    // Criar tabela de configurações
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    `);
+
+    console.log('[Database] ✅ Todas as tabelas criadas com sucesso');
+  } catch (error) {
+    console.error('[Database] ❌ Erro ao inicializar banco:', error);
+    throw error;
+  }
 };
 
 /**
  * Adiciona uma entrada ao histórico
  */
-export const addHistoryEntry = (url: string, title: string): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    if (!db) {
-      reject(new Error('Banco de dados não inicializado'));
-      return;
+export const addHistoryEntry = (url: string, title: string, favicon?: string): void => {
+  if (!db) throw new Error('Database not initialized');
+  
+  // Ignora URLs internas
+  if (url.startsWith('hera://')) {
+    return;
+  }
+
+  try {
+    // Verifica se a URL já existe
+    const existing = db.prepare('SELECT id, visit_count FROM history WHERE url = ?').get(url) as { id: number; visit_count: number } | undefined;
+
+    if (existing) {
+      // Atualiza contador de visitas e timestamp
+      db.prepare(`
+        UPDATE history 
+        SET visit_count = visit_count + 1, 
+            timestamp = ?, 
+            title = ?,
+            favicon = COALESCE(?, favicon)
+        WHERE id = ?
+      `).run(Date.now(), title, favicon, existing.id);
+    } else {
+      // Insere nova entrada
+      db.prepare(`
+        INSERT INTO history (url, title, timestamp, favicon) 
+        VALUES (?, ?, ?, ?)
+      `).run(url, title, Date.now(), favicon);
     }
-
-    // Ignora URLs internas
-    if (url.startsWith('hera://')) {
-      resolve();
-      return;
-    }
-
-    // Primeiro, verifica se já existe uma entrada com essa URL (independente do título)
-    db.get(
-      'SELECT id, visit_count FROM history WHERE url = ?',
-      [url],
-      (err: Error | null, row: { id: number; visit_count: number } | undefined) => {
-        if (err) {
-          console.error('Erro ao verificar histórico:', err);
-          resolve(); // Não bloqueia se houver erro
-          return;
-        }
-
-        if (row) {
-          // Se existe, atualiza o timestamp, título e incrementa visit_count
-          db!.run(
-            'UPDATE history SET title = ?, timestamp = ?, visit_count = visit_count + 1 WHERE id = ?',
-            [title, Date.now(), row.id],
-            (updateErr: Error | null) => {
-              if (updateErr) {
-                console.error('Erro ao atualizar histórico:', updateErr);
-              }
-              resolve();
-            }
-          );
-        } else {
-          // Se não existe, insere nova entrada
-          db!.run(
-            'INSERT INTO history (url, title, timestamp, visit_count) VALUES (?, ?, ?, ?)',
-            [url, title, Date.now(), 1],
-            (insertErr: Error | null) => {
-              if (insertErr) {
-                console.error('Erro ao inserir no histórico:', insertErr);
-              }
-              resolve();
-            }
-          );
-        }
-      }
-    );
-  });
+  } catch (error) {
+    console.error('[Database] Erro ao adicionar ao histórico:', error);
+  }
 };
 
 /**
- * Retorna o histórico ordenado por timestamp (mais recente primeiro)
+ * Obtém todo o histórico
  */
-export const getHistory = (limit: number = 1000): Promise<HistoryEntry[]> => {
-  return new Promise((resolve, reject) => {
-    if (!db) {
-      reject(new Error('Banco de dados não inicializado'));
-      return;
-    }
+export const getHistory = (): HistoryEntry[] => {
+  if (!db) throw new Error('Database not initialized');
 
-    db.all(
-      'SELECT * FROM history ORDER BY timestamp DESC LIMIT ?',
-      [limit],
-      (err: Error | null, rows: unknown[]) => {
-        if (err) {
-          console.error('Erro ao buscar histórico:', err);
-          reject(err);
-          return;
-        }
-        const validatedHistory = validateHistoryEntries(rows);
-        resolve(validatedHistory);
-      }
-    );
-  });
+  try {
+    const rows = db.prepare(`
+      SELECT id, url, title, timestamp, visit_count, favicon 
+      FROM history 
+      ORDER BY timestamp DESC 
+      LIMIT 1000
+    `).all() as any[];
+
+    const history: HistoryEntry[] = rows.map(row => ({
+      id: row.id,
+      url: row.url,
+      title: row.title,
+      timestamp: row.timestamp,
+      visit_count: row.visit_count,
+      favicon: row.favicon || undefined
+    }));
+
+    return validateHistoryEntries(history);
+  } catch (error) {
+    console.error('[Database] Erro ao buscar histórico:', error);
+    return [];
+  }
 };
 
 /**
  * Limpa todo o histórico
  */
-export const clearHistory = (): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    if (!db) {
-      reject(new Error('Banco de dados não inicializado'));
-      return;
-    }
+export const clearHistory = (): void => {
+  if (!db) throw new Error('Database not initialized');
 
-    db.run('DELETE FROM history', (err: Error | null) => {
-      if (err) {
-        console.error('Erro ao limpar histórico:', err);
-        reject(err);
-        return;
-      }
-      console.log('Histórico limpo com sucesso');
-      resolve();
-    });
-  });
-};
-
-/**
- * Obtém uma configuração
- */
-export const getSetting = (key: string): Promise<string | null> => {
-  return new Promise((resolve, reject) => {
-    if (!db) {
-      reject(new Error('Banco de dados não inicializado'));
-      return;
-    }
-
-    db.get('SELECT value FROM settings WHERE key = ?', [key], (err: Error | null, row: { value: string } | undefined) => {
-      if (err) {
-        console.error('Erro ao buscar configuração:', err);
-        reject(err);
-        return;
-      }
-      resolve(row ? row.value : null);
-    });
-  });
-};
-
-/**
- * Salva uma configuração
- */
-export const setSetting = (key: string, value: string): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    if (!db) {
-      reject(new Error('Banco de dados não inicializado'));
-      return;
-    }
-
-    db.run(
-      'INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)',
-      [key, value, Date.now()],
-      (err: Error | null) => {
-        if (err) {
-          console.error('Erro ao salvar configuração:', err);
-          reject(err);
-          return;
-        }
-        resolve();
-      }
-    );
-  });
-};
-
-/**
- * Obtém todas as configurações como objeto
- */
-export const getAllSettings = (): Promise<Record<string, string>> => {
-  return new Promise((resolve, reject) => {
-    if (!db) {
-      reject(new Error('Banco de dados não inicializado'));
-      return;
-    }
-
-    db.all('SELECT key, value FROM settings', [], (err: Error | null, rows: { key: string; value: string }[]) => {
-      if (err) {
-        console.error('Erro ao buscar configurações:', err);
-        reject(err);
-        return;
-      }
-
-      const settings: Record<string, string> = {};
-      rows.forEach((row) => {
-        settings[row.key] = row.value;
-      });
-      resolve(settings);
-    });
-  });
-};
-
-/**
- * Salva o estado das abas abertas
- */
-export const saveOpenTabs = (tabs: TabState[]): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    if (!db) {
-      reject(new Error('Banco de dados não inicializado'));
-      return;
-    }
-
-    // Limpa todas as abas salvas
-    db.run('DELETE FROM open_tabs', (err: Error | null) => {
-      if (err) {
-        console.error('Erro ao limpar abas salvas:', err);
-        reject(err);
-        return;
-      }
-
-      // Insere todas as abas
-      if (tabs.length === 0) {
-        resolve();
-        return;
-      }
-
-      let completed = 0;
-      let hasError = false;
-
-      tabs.forEach((tab) => {
-        db!.run(
-          'INSERT OR REPLACE INTO open_tabs (id, url, title, favicon, position, active) VALUES (?, ?, ?, ?, ?, ?)',
-          [tab.id, tab.url, tab.title, tab.favicon || null, tab.position, tab.active ? 1 : 0],
-          (err: Error | null) => {
-            if (err && !hasError) {
-              hasError = true;
-              console.error('Erro ao salvar aba:', err);
-              reject(err);
-            } else {
-              completed++;
-              if (completed === tabs.length && !hasError) {
-                console.log(`${tabs.length} abas salvas com sucesso`);
-                resolve();
-              }
-            }
-          }
-        );
-      });
-    });
-  });
-};
-
-/**
- * Carrega o estado das abas salvas
- */
-export const loadOpenTabs = (): Promise<TabState[]> => {
-  return new Promise((resolve, reject) => {
-    if (!db) {
-      reject(new Error('Banco de dados não inicializado'));
-      return;
-    }
-
-    db.all(
-      'SELECT * FROM open_tabs ORDER BY position ASC',
-      [],
-      (err: Error | null, rows: { id: string; url: string; title: string; favicon: string | null; position: number; active: number }[]) => {
-        if (err) {
-          console.error('Erro ao carregar abas salvas:', err);
-          reject(err);
-          return;
-        }
-
-        const tabs: TabState[] = rows.map((row) => ({
-          id: row.id,
-          url: row.url,
-          title: row.title,
-          favicon: row.favicon || undefined,
-          position: row.position,
-          active: row.active === 1,
-        }));
-
-        resolve(tabs);
-      }
-    );
-  });
-};
-
-/**
- * Limpa todas as abas salvas
- */
-export const clearOpenTabs = (): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    if (!db) {
-      reject(new Error('Banco de dados não inicializado'));
-      return;
-    }
-
-    db.run('DELETE FROM open_tabs', (err: Error | null) => {
-      if (err) {
-        console.error('Erro ao limpar abas salvas:', err);
-        reject(err);
-        return;
-      }
-      resolve();
-    });
-  });
+  try {
+    db.prepare('DELETE FROM history').run();
+    console.log('[Database] Histórico limpo com sucesso');
+  } catch (error) {
+    console.error('[Database] Erro ao limpar histórico:', error);
+    throw error;
+  }
 };
 
 /**
  * Adiciona um favorito
  */
-export const addBookmark = (url: string, title: string, favicon?: string, folderId?: string): Promise<Bookmark> => {
-  return new Promise((resolve, reject) => {
-    if (!db) {
-      reject(new Error('Banco de dados não inicializado'));
-      return;
-    }
+export const addBookmark = (id: string, url: string, title: string, favicon?: string, folderId?: string): Bookmark => {
+  if (!db) throw new Error('Database not initialized');
 
-    const id = `bookmark_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const timestamp = Date.now();
+  try {
+    const position = db.prepare('SELECT COUNT(*) as count FROM bookmarks WHERE folder_id IS ?').get(folderId || null) as { count: number };
+    
+    db.prepare(`
+      INSERT INTO bookmarks (id, url, title, favicon, folder_id, position) 
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(id, url, title, favicon, folderId, position.count);
 
-    db.run(
-      'INSERT INTO bookmarks (id, url, title, favicon, folder_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [id, url, title, favicon || null, folderId || null, timestamp, timestamp],
-      (err: Error | null) => {
-        if (err) {
-          console.error('Erro ao adicionar favorito:', err);
-          reject(err);
-          return;
-        }
-        resolve({ id, url, title, favicon, folder_id: folderId, position: 0, created_at: timestamp, updated_at: timestamp });
-      }
-    );
-  });
+    return {
+      id,
+      url,
+      title,
+      favicon,
+      folder_id: folderId,
+      position: position.count,
+      created_at: Date.now(),
+      updated_at: Date.now()
+    };
+  } catch (error) {
+    console.error('[Database] Erro ao adicionar favorito:', error);
+    throw error;
+  }
 };
 
 /**
  * Remove um favorito
  */
-export const removeBookmark = (id: string): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    if (!db) {
-      reject(new Error('Banco de dados não inicializado'));
-      return;
-    }
+export const removeBookmark = (id: string): boolean => {
+  if (!db) throw new Error('Database not initialized');
 
-    db.run('DELETE FROM bookmarks WHERE id = ?', [id], (err: Error | null) => {
-      if (err) {
-        console.error('Erro ao remover favorito:', err);
-        reject(err);
-        return;
-      }
-      resolve();
-    });
-  });
+  try {
+    const result = db.prepare('DELETE FROM bookmarks WHERE id = ?').run(id);
+    return result.changes > 0;
+  } catch (error) {
+    console.error('[Database] Erro ao remover favorito:', error);
+    return false;
+  }
 };
 
 /**
- * Obtém todos os favoritos (opcionalmente filtrados por pasta)
+ * Obtém favoritos de uma pasta
  */
-export const getBookmarks = (folderId?: string): Promise<Bookmark[]> => {
-  return new Promise((resolve, reject) => {
-    if (!db) {
-      reject(new Error('Banco de dados não inicializado'));
-      return;
-    }
+export const getBookmarks = (folderId?: string): Bookmark[] => {
+  if (!db) throw new Error('Database not initialized');
 
-    const query = folderId 
-      ? 'SELECT * FROM bookmarks WHERE folder_id = ? ORDER BY position ASC, created_at DESC'
-      : 'SELECT * FROM bookmarks WHERE folder_id IS NULL ORDER BY position ASC, created_at DESC';
-    
-    db.all(query, folderId ? [folderId] : [], (err: Error | null, rows: unknown[]) => {
-      if (err) {
-        console.error('Erro ao buscar favoritos:', err);
-        reject(err);
-        return;
-      }
+  try {
+    const rows = db.prepare(`
+      SELECT id, url, title, favicon, folder_id, position, created_at, updated_at 
+      FROM bookmarks 
+      WHERE folder_id IS ? 
+      ORDER BY position ASC
+    `).all(folderId || null) as any[];
 
-      const bookmarks: Bookmark[] = rows.map((row: any) => ({
-        id: row.id,
-        url: row.url,
-        title: row.title,
-        favicon: row.favicon || undefined,
-        folder_id: row.folder_id || undefined,
-        position: row.position,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-      }));
+    const bookmarks: Bookmark[] = rows.map(row => ({
+      id: row.id,
+      url: row.url,
+      title: row.title,
+      favicon: row.favicon || undefined,
+      folder_id: row.folder_id || undefined,
+      position: row.position,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    }));
 
-      const validatedBookmarks = validateBookmarks(bookmarks);
-      resolve(validatedBookmarks);
-    });
-  });
+    return validateBookmarks(bookmarks);
+  } catch (error) {
+    console.error('[Database] Erro ao buscar favoritos:', error);
+    return [];
+  }
 };
 
 /**
- * Busca favoritos por texto (título ou URL)
+ * Busca favoritos por título ou URL
  */
-export const searchBookmarks = (query: string): Promise<Bookmark[]> => {
-  return new Promise((resolve, reject) => {
-    if (!db) {
-      reject(new Error('Banco de dados não inicializado'));
-      return;
-    }
+export const searchBookmarks = (query: string): Bookmark[] => {
+  if (!db) throw new Error('Database not initialized');
 
-    const searchTerm = `%${query}%`;
-    db.all(
-      'SELECT * FROM bookmarks WHERE title LIKE ? OR url LIKE ? ORDER BY updated_at DESC',
-      [searchTerm, searchTerm],
-      (err: Error | null, rows: unknown[]) => {
-        if (err) {
-          console.error('Erro ao buscar favoritos:', err);
-          reject(err);
-          return;
-        }
+  try {
+    const rows = db.prepare(`
+      SELECT id, url, title, favicon, folder_id, position, created_at, updated_at 
+      FROM bookmarks 
+      WHERE title LIKE ? OR url LIKE ? 
+      ORDER BY position ASC
+    `).all(`%${query}%`, `%${query}%`) as any[];
 
-        const bookmarks: Bookmark[] = rows.map((row: any) => ({
-          id: row.id,
-          url: row.url,
-          title: row.title,
-          favicon: row.favicon || undefined,
-          folder_id: row.folder_id || undefined,
-          position: row.position,
-          created_at: row.created_at,
-          updated_at: row.updated_at,
-        }));
+    const bookmarks: Bookmark[] = rows.map(row => ({
+      id: row.id,
+      url: row.url,
+      title: row.title,
+      favicon: row.favicon || undefined,
+      folder_id: row.folder_id || undefined,
+      position: row.position,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    }));
 
-        const validatedBookmarks = validateBookmarks(bookmarks);
-        resolve(validatedBookmarks);
-      }
-    );
-  });
+    return validateBookmarks(bookmarks);
+  } catch (error) {
+    console.error('[Database] Erro ao buscar favoritos:', error);
+    return [];
+  }
 };
 
 /**
  * Cria uma pasta de favoritos
  */
-export const createBookmarkFolder = (name: string, parentId?: string): Promise<BookmarkFolder> => {
-  return new Promise((resolve, reject) => {
-    if (!db) {
-      reject(new Error('Banco de dados não inicializado'));
-      return;
-    }
+export const createBookmarkFolder = (id: string, name: string, parentId?: string): BookmarkFolder => {
+  if (!db) throw new Error('Database not initialized');
 
-    const id = `folder_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const timestamp = Date.now();
-
-    db.run(
-      'INSERT INTO bookmark_folders (id, name, parent_id, created_at) VALUES (?, ?, ?, ?)',
-      [id, name, parentId || null, timestamp],
-      (err: Error | null) => {
-        if (err) {
-          console.error('Erro ao criar pasta de favoritos:', err);
-          reject(err);
-          return;
-        }
-        resolve({ id, name, parent_id: parentId, position: 0, created_at: timestamp });
-      }
-    );
-  });
-};
-
-/**
- * Obtém todas as pastas
- */
-export const getBookmarkFolders = (parentId?: string): Promise<BookmarkFolder[]> => {
-  return new Promise((resolve, reject) => {
-    if (!db) {
-      reject(new Error('Banco de dados não inicializado'));
-      return;
-    }
-
-    const query = parentId
-      ? 'SELECT * FROM bookmark_folders WHERE parent_id = ? ORDER BY position ASC, name ASC'
-      : 'SELECT * FROM bookmark_folders WHERE parent_id IS NULL ORDER BY position ASC, name ASC';
+  try {
+    const position = db.prepare('SELECT COUNT(*) as count FROM bookmark_folders WHERE parent_id IS ?').get(parentId || null) as { count: number };
     
-    db.all(query, parentId ? [parentId] : [], (err: Error | null, rows: { id: string; name: string; parent_id: string | null; position: number; created_at: number }[]) => {
-      if (err) {
-        console.error('Erro ao buscar pastas de favoritos:', err);
-        reject(err);
-        return;
-      }
+    db.prepare(`
+      INSERT INTO bookmark_folders (id, name, parent_id, position) 
+      VALUES (?, ?, ?, ?)
+    `).run(id, name, parentId, position.count);
 
-      const folders: BookmarkFolder[] = rows.map((row) => ({
-        id: row.id,
-        name: row.name,
-        parent_id: row.parent_id || undefined,
-        position: row.position,
-        created_at: row.created_at,
-      }));
-
-      resolve(folders);
-    });
-  });
+    return {
+      id,
+      name,
+      parent_id: parentId,
+      position: position.count,
+      created_at: Date.now()
+    };
+  } catch (error) {
+    console.error('[Database] Erro ao criar pasta:', error);
+    throw error;
+  }
 };
 
 /**
- * Fecha a conexão com o banco de dados
+ * Obtém pastas de favoritos
  */
-export const closeDatabase = (): Promise<void> => {
-  return new Promise((resolve) => {
-    if (db) {
-      db.close((err: Error | null) => {
-        if (err) {
-          console.error('Erro ao fechar banco de dados:', err);
-        } else {
-          console.log('Banco de dados fechado');
-        }
-        db = null;
-        resolve();
-      });
-    } else {
-      resolve();
-    }
-  });
+export const getBookmarkFolders = (parentId?: string): BookmarkFolder[] => {
+  if (!db) throw new Error('Database not initialized');
+
+  try {
+    const rows = db.prepare(`
+      SELECT id, name, parent_id, position, created_at 
+      FROM bookmark_folders 
+      WHERE parent_id IS ? 
+      ORDER BY position ASC
+    `).all(parentId || null) as any[];
+
+    return rows.map(row => ({
+      id: row.id,
+      name: row.name,
+      parent_id: row.parent_id || undefined,
+      position: row.position,
+      created_at: row.created_at
+    }));
+  } catch (error) {
+    console.error('[Database] Erro ao buscar pastas:', error);
+    return [];
+  }
 };
 
+/**
+ * Salva o estado das abas abertas
+ */
+export const saveTabsState = (tabs: TabState[]): void => {
+  if (!db) throw new Error('Database not initialized');
+
+  try {
+    // Limpa abas antigas
+    db.prepare('DELETE FROM open_tabs').run();
+
+    // Insere todas as abas
+    const insert = db.prepare(`
+      INSERT INTO open_tabs (id, url, title, favicon, position, active) 
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+
+    const insertMany = db.transaction((tabs: TabState[]) => {
+      for (const tab of tabs) {
+        insert.run(tab.id, tab.url, tab.title, tab.favicon, tab.position, tab.active ? 1 : 0);
+      }
+    });
+
+    insertMany(tabs);
+    console.log(`[Database] ${tabs.length} abas salvas com sucesso`);
+  } catch (error) {
+    console.error('[Database] Erro ao salvar abas:', error);
+    throw error;
+  }
+};
+
+/**
+ * Obtém o estado das abas salvas
+ */
+export const getTabsState = (): TabState[] => {
+  if (!db) throw new Error('Database not initialized');
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows = db.prepare(`
+      SELECT id, url, title, favicon, position, active 
+      FROM open_tabs 
+      ORDER BY position ASC
+    `).all() as unknown[];
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return rows.map((row: any) => ({
+      id: row.id,
+      url: row.url,
+      title: row.title,
+      favicon: row.favicon || undefined,
+      position: row.position,
+      active: row.active === 1
+    }));
+  } catch (error) {
+    console.error('[Database] Erro ao buscar abas:', error);
+    return [];
+  }
+};
+
+/**
+ * Obtém uma configuração
+ */
+export const getSetting = (key: string): string | null => {
+  if (!db) throw new Error('Database not initialized');
+
+  try {
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
+    return row ? row.value : null;
+  } catch (error) {
+    console.error('[Database] Erro ao buscar configuração:', error);
+    return null;
+  }
+};
+
+/**
+ * Define uma configuração
+ */
+export const setSetting = (key: string, value: string): boolean => {
+  if (!db) throw new Error('Database not initialized');
+
+  try {
+    db.prepare(`
+      INSERT INTO settings (key, value) 
+      VALUES (?, ?) 
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `).run(key, value);
+    return true;
+  } catch (error) {
+    console.error('[Database] Erro ao salvar configuração:', error);
+    return false;
+  }
+};
+
+/**
+ * Obtém todas as configurações
+ */
+export const getAllSettings = (): Record<string, string> => {
+  if (!db) throw new Error('Database not initialized');
+
+  try {
+    const rows = db.prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[];
+    const settings: Record<string, string> = {};
+    for (const row of rows) {
+      settings[row.key] = row.value;
+    }
+    return settings;
+  } catch (error) {
+    console.error('[Database] Erro ao buscar configurações:', error);
+    return {};
+  }
+};
+
+/**
+ * Fecha o banco de dados
+ */
+export const closeDatabase = (): void => {
+  if (db) {
+    try {
+      db.close();
+      db = null;
+      console.log('[Database] Banco de dados fechado');
+    } catch (error) {
+      console.error('[Database] Erro ao fechar banco:', error);
+    }
+  }
+};
