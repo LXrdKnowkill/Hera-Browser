@@ -1,6 +1,39 @@
 # Changelog - Hera Browser
 
-## [2.0.5.1] - 2025-11-06 (Hotfix)
+## [2.0.5.2] - 2025-11-08 (Hotfix - Downloads, Database & ESLint)
+
+### 🐛 Critical Bug Fixes (P0)
+
+#### Download Status "Cancelado" Fixed
+- **FIXED: Downloads now show correct "Completed" status**
+  - Changed download tracking to use unique ID instead of savePath
+  - Fixed race condition where savePath didn't match between events
+  - Downloads now reliably show correct status in UI
+  - Eliminated download status update failures
+
+#### Database Initialization in Dev Mode (P1)
+- **FIXED: Database now initializes correctly in development mode**
+  - Added workaround for webpack-asset-relocator-loader not setting `__webpack_require__.ab`
+  - Manually set asset base path before importing better-sqlite3
+  - Fixed "Cannot find module 'undefinedbuild/Release/better_sqlite3.node'" error
+  - All database-dependent features now work in dev mode (history, bookmarks, downloads, settings)
+
+### 🔧 Code Quality Improvements (BONUS)
+- **ESLint: Fixed 180+ warnings across the codebase**
+  - Renamed `Database` import to `BetterSqlite3` to avoid naming conflicts
+  - Removed duplicate imports
+  - Fixed `import/no-named-as-default` warnings
+  - Fixed `import/no-duplicates` warnings
+  - Improved code consistency and maintainability
+
+### 📊 Testing
+- Completed full functional testing of all features
+- Verified no regressions from fixes
+- Confirmed tab management, navigation, history, bookmarks, downloads, and settings all working
+
+---
+
+## [2.0.5.1] - 2025-11-06 (Hotfix Find in Page)
 
 ### 🐛 Critical Bug Fixes
 

@@ -2,7 +2,7 @@
 
 A modern, feature-rich web browser built with Electron and TypeScript, designed for performance, security, and user experience.
 
-![Version](https://img.shields.io/badge/version-2.0.5-blue.svg)
+![Version](https://img.shields.io/badge/version-2.0.5.2-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Electron](https://img.shields.io/badge/Electron-38.4.0-47848F.svg)
 ![TypeScript](https://img.shields.io/badge/TypeScript-100%25-blue.svg)
@@ -76,7 +76,7 @@ _Coming soon..._
 
 1. Clone the repository
 ```bash
-git clone https://github.com/YOUR_USERNAME/hera-browser.git
+git clone https://github.com/LXrdKnowkill/hera-browser.git
 cd hera-browser
 ```
 
@@ -179,9 +179,21 @@ Hera Browser implements multiple security layers:
 - **Data Validation** - Type guards for database operations
 - **Least Privilege Principle** - Each component has only necessary permissions
 
-See [SECURITY_PRELOAD.md](SECURITY_PRELOAD.md) for detailed information.
+For detailed security information, see the Security section above.
 
 ## Changelog
+
+### v2.0.5.2 (2025-11-08) - Latest
+- **FIXED: Download status showing "Cancelado" incorrectly**
+- **FIXED: Database initialization in development mode**
+- **FIXED: 180+ ESLint warnings across codebase**
+- Improved code quality and maintainability
+- Full functional testing completed
+
+### v2.0.5.1 (2025-11-06)
+- Fixed memory leak in Find in Page listeners
+- Fixed race condition in find bar state restoration
+- Improved tab switching reliability
 
 ### v2.0.5 (2025-11-05)
 - Find in Page functionality with Ctrl+F
@@ -260,10 +272,8 @@ GitHub: [@LXrdKnowkill](https://github.com/LXrdKnowkill)
 
 ## Additional Documentation
 
-- [SECURITY_PRELOAD.md](SECURITY_PRELOAD.md) - Security documentation
-- [TYPE_TESTS_EXPLAINED.md](TYPE_TESTS_EXPLAINED.md) - Type testing explanation
-- [DOWNLOAD_NOTIFICATIONS.md](DOWNLOAD_NOTIFICATIONS.md) - Notification system
 - [CHANGELOG.md](CHANGELOG.md) - Complete version history
+- [src/types/__tests__/README.md](src/types/__tests__/README.md) - Type testing documentation
 
 ---
 

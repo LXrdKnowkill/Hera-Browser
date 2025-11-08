@@ -224,59 +224,43 @@ function showInFolder(download) {
 }
 
 // Remove download from list
-function removeDownload(id) {
-  downloads = downloads.filter(d => d.id !== id);
-  renderDownloads();
-  saveDownloads();
-}
-
-// Clear completed downloads
-function clearCompleted() {
-  downloads = downloads.filter(d => d.state !== 'completed');
-  renderDownloads();
-  saveDownloads();
-}
-
-// Save downloads to localStorage
-function saveDownloads() {
+async function removeDownload(id) {
   try {
-    localStorage.setItem('hera-downloads', JSON.stringify(downloads));
+    const success = await window.heraAPI.removeDownload(id);
+    if (success) {
+      downloads = downloads.filter(d => d.id !== id);
+      renderDownloads();
+    }
   } catch (error) {
-    console.error('Erro ao salvar downloads:', error);
+    console.error('[Downloads] Erro ao remover download:', error);
   }
 }
 
-// Load downloads from localStorage
-function loadDownloads() {
+// Clear completed downloads
+async function clearCompleted() {
   try {
-    const saved = localStorage.getItem('hera-downloads');
-    if (saved) {
-      downloads = JSON.parse(saved);
-      
-      // Limpar downloads antigos que ficaram travados em "downloading"
-      // Se o app foi fechado, downloads em progresso devem ser marcados como cancelados
-      let needsSave = false;
-      downloads = downloads.map(download => {
-        if (download.state === 'downloading') {
-          needsSave = true;
-          return {
-            ...download,
-            state: 'cancelled',
-            progress: 0
-          };
-        }
-        return download;
-      });
-      
-      if (needsSave) {
-        saveDownloads();
-      }
-      renderDownloads();
-    } else {
+    await window.heraAPI.clearCompletedDownloads();
+    await loadDownloads(); // Recarrega do DB
+  } catch (error) {
+    console.error('[Downloads] Erro ao limpar downloads:', error);
+  }
+}
+
+// ✅ REFATORADO: Agora usa banco de dados SQLite em vez de localStorage
+// O array 'downloads' é apenas um cache local para a UI
+
+// Load downloads from database
+async function loadDownloads() {
+  try {
+    downloads = await window.heraAPI.getDownloads();
+    
+    if (downloads.length === 0) {
       emptyState.classList.remove('hidden');
+    } else {
+      renderDownloads();
     }
   } catch (error) {
-    console.error('Erro ao carregar downloads:', error);
+    console.error('[Downloads] Erro ao carregar downloads do DB:', error);
     emptyState.classList.remove('hidden');
   }
 }
@@ -296,7 +280,7 @@ if (window.heraAPI) {
   window.heraAPI.onDownloadStarted((data) => {
     console.log('[Downloads] Download started:', data);
     const download = {
-      id: Date.now().toString(),
+      id: data.id, // ✅ CORREÇÃO: Usar o ID do evento
       filename: data.filename,
       savePath: data.savePath,
       totalBytes: data.totalBytes,
@@ -306,37 +290,47 @@ if (window.heraAPI) {
     };
     downloads.unshift(download);
     renderDownloads();
-    saveDownloads();
-    console.log('[Downloads] Download adicionado:', download);
+    // ✅ Não precisa mais salvar - já está no DB via index.ts
+    console.log('[Downloads] Download adicionado com ID correto:', download.id);
   });
 
   // Download progress
   window.heraAPI.onDownloadProgress((data) => {
-    const download = downloads.find(d => d.savePath === data.savePath);
+    const download = downloads.find(d => d.id === data.id); // ✅ CORREÇÃO: Buscar por ID
     if (download) {
       download.receivedBytes = data.receivedBytes;
       download.totalBytes = data.totalBytes;
       download.progress = (data.receivedBytes / data.totalBytes) * 100;
       renderDownloads();
     } else {
-      console.warn('[Downloads] Progress para download não encontrado:', data.savePath);
-      console.log('[Downloads] Downloads atuais:', downloads.map(d => d.savePath));
+      console.warn('[Downloads] Progress para download não encontrado:', data.id);
+      console.log('[Downloads] Downloads atuais:', downloads.map(d => d.id));
     }
   });
 
   // Download complete
   window.heraAPI.onDownloadComplete((data) => {
     console.log('[Downloads] Download complete:', data);
-    const download = downloads.find(d => d.savePath === data.savePath);
+    const download = downloads.find(d => d.id === data.id); // ✅ CORREÇÃO: Buscar por ID
     if (download) {
-      download.state = data.state || 'completed';
+      console.log(`[Download ${download.id}] Estado recebido: ${data.state}`);
+      
+      // ✅ Hotfix temporário para o bug "Cancelado"
+      if (data.state === 'cancelled' && download.progress > 99) {
+        console.warn('[Downloads] Download estava quase completo, marcando como completed');
+        download.state = 'completed';
+      } else {
+        download.state = data.state || 'completed';
+      }
+      
       download.progress = 100;
       download.receivedBytes = download.totalBytes;
+      download.savePath = data.savePath; // ✅ Atualiza o savePath final
       renderDownloads();
-      saveDownloads();
+      // ✅ Não precisa mais salvar - já está no DB via index.ts
       console.log('[Downloads] Download atualizado:', download);
     } else {
-      console.warn('[Downloads] Download não encontrado:', data.savePath);
+      console.warn('[Downloads] Download concluído não encontrado:', data.id);
     }
   });
 }

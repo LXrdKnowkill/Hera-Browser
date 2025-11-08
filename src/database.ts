@@ -1,13 +1,27 @@
 // External dependencies
 import path from 'path';
+import fs from 'fs';
 import { app } from 'electron';
-import Database from 'better-sqlite3';
+
+// Fix for webpack-asset-relocator-loader not setting __webpack_require__.ab in dev mode
+// This is a known issue where the asset base path is undefined, causing better-sqlite3 to fail
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-expect-error - __webpack_require__ is a webpack internal variable
+if (typeof __webpack_require__ !== 'undefined' && !__webpack_require__.ab) {
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-expect-error - Setting the asset base path manually
+  __webpack_require__.ab = path.join(__dirname, 'native_modules/');
+}
+
+import BetterSqlite3 from 'better-sqlite3';
 
 // Types
 import type { HistoryEntry, Bookmark, BookmarkFolder, TabState } from './types';
 import { validateBookmarks, validateHistoryEntries } from './types/guards';
+import type { TableColumnInfo, HistoryRow, BookmarkRow, DownloadRow, TabStateRow, BookmarkFolderRow } from './types/database-internal.types';
+import Database from 'better-sqlite3';
 
-let db: Database.Database | null = null;
+let db: BetterSqlite3.Database | null = null;
 
 /**
  * Inicializa o banco de dados SQLite
@@ -16,14 +30,26 @@ export const initDatabase = (): void => {
   try {
     console.log('[Database] Iniciando inicialização...');
     console.log('[Database] Verificando módulo Database:', typeof Database);
-    
+    console.log('[Database] Dev mode:', !app.isPackaged);
+
     const userDataPath = app.getPath('userData');
+
+    // ✅ CORREÇÃO: Garantir que o diretório existe
+    if (!fs.existsSync(userDataPath)) {
+      console.warn(`[Database] Diretório userData não existe. Criando: ${userDataPath}`);
+      fs.mkdirSync(userDataPath, { recursive: true });
+    }
+
     const dbPath = path.join(userDataPath, 'hera-browser.db');
     console.log('[Database] Caminho do banco:', dbPath);
     console.log('[Database] UserData path:', userDataPath);
-    
+
     console.log('[Database] Tentando criar instância do Database...');
-    db = new Database(dbPath);
+    db = new BetterSqlite3(dbPath);
+
+    // ✅ Testar conexão imediatamente
+    db.prepare('SELECT 1').get();
+    console.log('[Database] ✅ Connection test passed');
     console.log('[Database] ✅ Banco de dados aberto com sucesso');
 
     // Criar tabela de histórico
@@ -40,8 +66,8 @@ export const initDatabase = (): void => {
 
     // Migração: adicionar coluna favicon se não existir
     try {
-      const tableInfo = db.prepare("PRAGMA table_info(history)").all() as any[];
-      const hasFavicon = tableInfo.some((col: any) => col.name === 'favicon');
+      const tableInfo = db.prepare("PRAGMA table_info(history)").all() as TableColumnInfo[];
+      const hasFavicon = tableInfo.some((col) => col.name === 'favicon');
       if (!hasFavicon) {
         console.log('[Database] Adicionando coluna favicon à tabela history...');
         db.exec('ALTER TABLE history ADD COLUMN favicon TEXT');
@@ -103,9 +129,50 @@ export const initDatabase = (): void => {
       )
     `);
 
+    // Criar tabela de downloads
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS downloads (
+        id TEXT PRIMARY KEY,
+        filename TEXT NOT NULL,
+        savePath TEXT,
+        totalBytes INTEGER,
+        receivedBytes INTEGER,
+        state TEXT DEFAULT 'downloading',
+        timestamp INTEGER
+      )
+    `);
+
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_downloads_timestamp ON downloads(timestamp DESC);
+    `);
+
     console.log('[Database] ✅ Todas as tabelas criadas com sucesso');
   } catch (error) {
     console.error('[Database] ❌ Erro ao inicializar banco:', error);
+
+    // ✅ Fallback para in-memory database no dev mode
+    if (!app.isPackaged) {
+      console.warn('[Database] Usando banco em memória (dev mode fallback)');
+      try {
+        db = new BetterSqlite3(':memory:');
+        // Recriar todas as tabelas no banco em memória
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            url TEXT NOT NULL,
+            title TEXT NOT NULL,
+            timestamp INTEGER NOT NULL,
+            visit_count INTEGER DEFAULT 1,
+            favicon TEXT
+          )
+        `);
+        console.log('[Database] ✅ Banco em memória inicializado');
+        return;
+      } catch (memError) {
+        console.error('[Database] ❌ Falha ao criar banco em memória:', memError);
+      }
+    }
+
     throw error;
   }
 };
@@ -115,7 +182,7 @@ export const initDatabase = (): void => {
  */
 export const addHistoryEntry = (url: string, title: string, favicon?: string): void => {
   if (!db) throw new Error('Database not initialized');
-  
+
   // Ignora URLs internas
   if (url.startsWith('hera://')) {
     return;
@@ -159,7 +226,7 @@ export const getHistory = (): HistoryEntry[] => {
       FROM history 
       ORDER BY timestamp DESC 
       LIMIT 1000
-    `).all() as any[];
+    `).all() as HistoryRow[];
 
     const history: HistoryEntry[] = rows.map(row => ({
       id: row.id,
@@ -200,7 +267,7 @@ export const addBookmark = (id: string, url: string, title: string, favicon?: st
 
   try {
     const position = db.prepare('SELECT COUNT(*) as count FROM bookmarks WHERE folder_id IS ?').get(folderId || null) as { count: number };
-    
+
     db.prepare(`
       INSERT INTO bookmarks (id, url, title, favicon, folder_id, position) 
       VALUES (?, ?, ?, ?, ?, ?)
@@ -249,7 +316,7 @@ export const getBookmarks = (folderId?: string): Bookmark[] => {
       FROM bookmarks 
       WHERE folder_id IS ? 
       ORDER BY position ASC
-    `).all(folderId || null) as any[];
+    `).all(folderId || null) as BookmarkRow[];
 
     const bookmarks: Bookmark[] = rows.map(row => ({
       id: row.id,
@@ -281,7 +348,7 @@ export const searchBookmarks = (query: string): Bookmark[] => {
       FROM bookmarks 
       WHERE title LIKE ? OR url LIKE ? 
       ORDER BY position ASC
-    `).all(`%${query}%`, `%${query}%`) as any[];
+    `).all(`%${query}%`, `%${query}%`) as BookmarkRow[];
 
     const bookmarks: Bookmark[] = rows.map(row => ({
       id: row.id,
@@ -309,7 +376,7 @@ export const createBookmarkFolder = (id: string, name: string, parentId?: string
 
   try {
     const position = db.prepare('SELECT COUNT(*) as count FROM bookmark_folders WHERE parent_id IS ?').get(parentId || null) as { count: number };
-    
+
     db.prepare(`
       INSERT INTO bookmark_folders (id, name, parent_id, position) 
       VALUES (?, ?, ?, ?)
@@ -340,7 +407,7 @@ export const getBookmarkFolders = (parentId?: string): BookmarkFolder[] => {
       FROM bookmark_folders 
       WHERE parent_id IS ? 
       ORDER BY position ASC
-    `).all(parentId || null) as any[];
+    `).all(parentId || null) as BookmarkFolderRow[];
 
     return rows.map(row => ({
       id: row.id,
@@ -392,15 +459,13 @@ export const getTabsState = (): TabState[] => {
   if (!db) throw new Error('Database not initialized');
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rows = db.prepare(`
       SELECT id, url, title, favicon, position, active 
       FROM open_tabs 
       ORDER BY position ASC
-    `).all() as unknown[];
+    `).all() as TabStateRow[];
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return rows.map((row: any) => ({
+    return rows.map((row) => ({
       id: row.id,
       url: row.url,
       title: row.title,
@@ -464,6 +529,118 @@ export const getAllSettings = (): Record<string, string> => {
   } catch (error) {
     console.error('[Database] Erro ao buscar configurações:', error);
     return {};
+  }
+};
+
+/**
+ * Adiciona um download ao banco
+ */
+export const addDownload = (id: string, filename: string, savePath: string, totalBytes: number): void => {
+  if (!db) throw new Error('Database not initialized');
+
+  try {
+    db.prepare(`
+      INSERT INTO downloads (id, filename, savePath, totalBytes, receivedBytes, state, timestamp)
+      VALUES (?, ?, ?, ?, 0, 'downloading', ?)
+    `).run(id, filename, savePath, totalBytes, Date.now());
+  } catch (error) {
+    console.error('[Database] Erro ao adicionar download:', error);
+    throw error;
+  }
+};
+
+/**
+ * Atualiza o progresso de um download
+ */
+export const updateDownloadProgress = (id: string, receivedBytes: number): void => {
+  if (!db) throw new Error('Database not initialized');
+
+  try {
+    db.prepare('UPDATE downloads SET receivedBytes = ? WHERE id = ?')
+      .run(receivedBytes, id);
+  } catch (error) {
+    console.error('[Database] Erro ao atualizar progresso:', error);
+  }
+};
+
+/**
+ * Atualiza o estado de um download
+ */
+export const updateDownloadState = (id: string, state: string, savePath: string): void => {
+  if (!db) throw new Error('Database not initialized');
+
+  try {
+    db.prepare('UPDATE downloads SET state = ?, savePath = ? WHERE id = ?')
+      .run(state, savePath, id);
+  } catch (error) {
+    console.error('[Database] Erro ao atualizar estado:', error);
+    throw error;
+  }
+};
+
+/**
+ * Interface para o resultado de download com progresso calculado
+ */
+interface DownloadWithProgress extends DownloadRow {
+  progress: number;
+}
+
+/**
+ * Obtém todos os downloads
+ */
+export const getDownloads = (): DownloadWithProgress[] => {
+  if (!db) throw new Error('Database not initialized');
+
+  try {
+    const rows = db.prepare(`
+      SELECT id, filename, savePath, totalBytes, receivedBytes, state, timestamp
+      FROM downloads
+      ORDER BY timestamp DESC
+    `).all() as DownloadRow[];
+
+    return rows.map((row) => ({
+      id: row.id,
+      filename: row.filename,
+      savePath: row.savePath,
+      totalBytes: row.totalBytes,
+      receivedBytes: row.receivedBytes,
+      state: row.state,
+      progress: (row.totalBytes > 0) ? (row.receivedBytes / row.totalBytes) * 100 : 0,
+      timestamp: row.timestamp
+    }));
+  } catch (error) {
+    console.error('[Database] Erro ao buscar downloads:', error);
+    return [];
+  }
+};
+
+/**
+ * Remove downloads concluídos
+ */
+export const clearCompletedDownloads = (): void => {
+  if (!db) throw new Error('Database not initialized');
+
+  try {
+    db.prepare("DELETE FROM downloads WHERE state = 'completed'").run();
+    console.log('[Database] Downloads concluídos removidos');
+  } catch (error) {
+    console.error('[Database] Erro ao limpar downloads:', error);
+    throw error;
+  }
+};
+
+/**
+ * Remove um download específico
+ */
+export const removeDownload = (id: string): boolean => {
+  if (!db) throw new Error('Database not initialized');
+
+  try {
+    const result = db.prepare('DELETE FROM downloads WHERE id = ?').run(id);
+    return result.changes > 0;
+  } catch (error) {
+    console.error('[Database] Erro ao remover download:', error);
+    return false;
   }
 };
 

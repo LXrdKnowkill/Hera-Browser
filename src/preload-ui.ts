@@ -120,6 +120,9 @@ const heraAPI: HeraAPI = {
   openDownloadedFile: (filePath: string): Promise<void> => ipcRenderer.invoke('download:open-file', filePath),
   showDownloadInFolder: (filePath: string): Promise<void> => ipcRenderer.invoke('download:show-in-folder', filePath),
   openDownloadsFolder: (): Promise<void> => ipcRenderer.invoke('download:open-folder'),
+  getDownloads: (): Promise<any[]> => ipcRenderer.invoke('downloads:get'),
+  clearCompletedDownloads: (): Promise<void> => ipcRenderer.invoke('downloads:clear-completed'),
+  removeDownload: (id: string): Promise<boolean> => ipcRenderer.invoke('downloads:remove', id),
 };
 
 contextBridge.exposeInMainWorld('heraAPI', heraAPI);

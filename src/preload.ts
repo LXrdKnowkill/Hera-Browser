@@ -69,6 +69,9 @@ const heraAPI: HeraAPI = {
   // Download Actions
   showItemInFolder: (path: string): Promise<void> => ipcRenderer.invoke('download:show-in-folder', path),
   openFile: (path: string): Promise<void> => ipcRenderer.invoke('download:open-file', path),
+  getDownloads: (): Promise<unknown[]> => ipcRenderer.invoke('downloads:get'),
+  clearCompletedDownloads: (): Promise<void> => ipcRenderer.invoke('downloads:clear-completed'),
+  removeDownload: (id: string): Promise<boolean> => ipcRenderer.invoke('downloads:remove', id),
 
   // View Actions
   toggleMenu: () => {

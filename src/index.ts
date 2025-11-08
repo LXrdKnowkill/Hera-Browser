@@ -21,22 +21,37 @@ import {
   getBookmarks,
   searchBookmarks,
   createBookmarkFolder,
-  getBookmarkFolders
+  getBookmarkFolders,
+  addDownload,
+  updateDownloadProgress,
+  updateDownloadState,
+  getDownloads,
+  clearCompletedDownloads,
+  removeDownload
 } from './database';
 
 // Types
 import type { Bookmark, BookmarkFolder, HistoryEntry, TabState } from './types';
-import { validateBookmarks, validateHistoryEntries } from './types/guards';
+import { 
+  validateBookmarks, 
+  validateHistoryEntries,
+  isValidTabId,
+  isValidBookmarkId,
+  isValidSettingKey
+} from './types/guards';
 
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
 declare const PRELOAD_WEB_WEBPACK_ENTRY: string;
 
-// Constantes
-const TAB_BAR_HEIGHT = 40;
-const NAV_BAR_HEIGHT = 50;
-const FAVORITES_BAR_HEIGHT = 44;
-const FIND_BAR_HEIGHT = 40;
+// ✅ Importar constantes centralizadas
+import {
+  TAB_BAR_HEIGHT,
+  NAV_BAR_HEIGHT,
+  FAVORITES_BAR_HEIGHT,
+  FIND_BAR_HEIGHT,
+  DEFAULT_USER_AGENT
+} from './constants';
 
 // Estado da UI
 let isFavoritesBarHidden = true; // Barra de favoritos é global (aparece em todas as abas)
@@ -207,7 +222,7 @@ const createNewTab = (url: string | undefined = undefined) => {
 
 
   // Captura erros de carregamento para páginas internas
-  view.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+  view.webContents.on('did-fail-load', (_event, errorCode, _errorDescription, validatedURL) => {
     // Se for um erro com protocolo hera://, tenta recarregar uma vez
     if (validatedURL.startsWith('hera://') && errorCode !== 0) {
       setTimeout(() => {
@@ -219,7 +234,7 @@ const createNewTab = (url: string | undefined = undefined) => {
   });
 
   // DevTools - F12 para abrir/fechar (nas abas também - painel integrado)
-  view.webContents.on('before-input-event', (event, input) => {
+  view.webContents.on('before-input-event', (_event, input) => {
     if (input.key === 'F12' || (input.key === 'I' && input.control && input.shift)) {
       if (view.webContents.isDevToolsOpened()) {
         view.webContents.closeDevTools();
@@ -303,10 +318,12 @@ const createNewTab = (url: string | undefined = undefined) => {
       mainWindow.webContents.send('tab-updated', id, { favicon: heraIconUrl, title });
       // Atualiza info da aba
       if (tabInfo.has(id)) {
-        const info = tabInfo.get(id)!;
-        info.url = url;
-        info.title = title || info.title;
-        info.favicon = heraIconUrl;
+        const info = tabInfo.get(id);
+        if (info) {
+          info.url = url;
+          info.title = title || info.title;
+          info.favicon = heraIconUrl;
+        }
       }
     } else {
 
@@ -342,14 +359,18 @@ const createNewTab = (url: string | undefined = undefined) => {
         mainWindow.webContents.send('tab-updated', id, { title });
         // Atualiza info da aba
         if (tabInfo.has(id)) {
-          const info = tabInfo.get(id)!;
-          info.url = url;
-          info.title = title;
+          const info = tabInfo.get(id);
+          if (info) {
+            info.url = url;
+            info.title = title;
+          }
         }
       } else if (tabInfo.has(id)) {
         // Se não houver título, pelo menos atualiza a URL
-        const info = tabInfo.get(id)!;
-        info.url = url;
+        const info = tabInfo.get(id);
+        if (info) {
+          info.url = url;
+        }
       }
 
       // Adiciona ao histórico DEPOIS de garantir que temos URL e título
@@ -364,13 +385,15 @@ const createNewTab = (url: string | undefined = undefined) => {
     }
   });
 
-  view.webContents.on('did-navigate', (event, navigateUrl) => {
+  view.webContents.on('did-navigate', (_event, navigateUrl) => {
     mainWindow.webContents.send('tab-updated', id, { url: navigateUrl });
 
     // Atualiza info da aba
     if (tabInfo.has(id)) {
-      const info = tabInfo.get(id)!;
-      info.url = navigateUrl;
+      const info = tabInfo.get(id);
+      if (info) {
+        info.url = navigateUrl;
+      }
     }
 
     // Tenta buscar favicon imediatamente após navegação (apenas para sites externos)
@@ -390,9 +413,11 @@ const createNewTab = (url: string | undefined = undefined) => {
             mainWindow.webContents.send('tab-updated', id, { favicon: resolvedUrl });
             // Atualiza info da aba
             if (tabInfo.has(id)) {
-              const info = tabInfo.get(id)!;
-              info.favicon = resolvedUrl;
-              info.url = navigateUrl;
+              const info = tabInfo.get(id);
+              if (info) {
+                info.favicon = resolvedUrl;
+                info.url = navigateUrl;
+              }
             }
           } else {
             // Fallback para favicon.ico padrão
@@ -402,9 +427,11 @@ const createNewTab = (url: string | undefined = undefined) => {
               mainWindow.webContents.send('tab-updated', id, { favicon: defaultFavicon });
               // Atualiza info da aba
               if (tabInfo.has(id)) {
-                const info = tabInfo.get(id)!;
-                info.favicon = defaultFavicon;
-                info.url = navigateUrl;
+                const info = tabInfo.get(id);
+                if (info) {
+                  info.favicon = defaultFavicon;
+                  info.url = navigateUrl;
+                }
               }
             } catch (e) {
               // Ignora erros
@@ -418,9 +445,11 @@ const createNewTab = (url: string | undefined = undefined) => {
             mainWindow.webContents.send('tab-updated', id, { favicon: defaultFavicon });
             // Atualiza info da aba
             if (tabInfo.has(id)) {
-              const info = tabInfo.get(id)!;
-              info.favicon = defaultFavicon;
-              info.url = navigateUrl;
+              const info = tabInfo.get(id);
+              if (info) {
+                info.favicon = defaultFavicon;
+                info.url = navigateUrl;
+              }
             }
           } catch (e) {
             // Ignora erros
@@ -431,25 +460,29 @@ const createNewTab = (url: string | undefined = undefined) => {
   });
 
   // Captura navegação dentro da mesma página (SPA/History API)
-  view.webContents.on('did-navigate-in-page', (event, url) => {
+  view.webContents.on('did-navigate-in-page', (_event, url) => {
     mainWindow.webContents.send('tab-updated', id, { url });
     // Atualiza info da aba
     if (tabInfo.has(id)) {
-      const info = tabInfo.get(id)!;
-      info.url = url;
+      const info = tabInfo.get(id);
+      if (info) {
+        info.url = url;
+      }
     }
   });
 
-  view.webContents.on('page-title-updated', (event, title) => {
+  view.webContents.on('page-title-updated', (_event, title) => {
     mainWindow.webContents.send('tab-updated', id, { title });
     // Atualiza info da aba
     if (tabInfo.has(id)) {
-      const info = tabInfo.get(id)!;
-      info.title = title;
+      const info = tabInfo.get(id);
+      if (info) {
+        info.title = title;
+      }
     }
   });
 
-  view.webContents.on('page-favicon-updated', (event, favicons) => {
+  view.webContents.on('page-favicon-updated', (_event, favicons) => {
     const currentUrl = view.webContents.getURL();
 
     // Para páginas internas, não atualizar favicon (já foi definido)
@@ -462,8 +495,10 @@ const createNewTab = (url: string | undefined = undefined) => {
       mainWindow.webContents.send('tab-updated', id, { favicon: resolvedUrl });
       // Atualiza info da aba
       if (tabInfo.has(id)) {
-        const info = tabInfo.get(id)!;
-        info.favicon = resolvedUrl;
+        const info = tabInfo.get(id);
+        if (info) {
+          info.favicon = resolvedUrl;
+        }
       }
     } else {
       // Se não houver favicon, tenta buscar o favicon.ico padrão
@@ -555,7 +590,7 @@ const createWindow = (): void => {
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
 
   // DevTools - F12 para abrir/fechar (painel integrado)
-  mainWindow.webContents.on('before-input-event', (event, input) => {
+  mainWindow.webContents.on('before-input-event', (_event, input) => {
     if (input.key === 'F12' || (input.key === 'I' && input.control && input.shift)) {
       if (mainWindow.webContents.isDevToolsOpened()) {
         mainWindow.webContents.closeDevTools();
@@ -645,13 +680,11 @@ app.whenReady().then(async () => {
   }
 
   // Configurar User Agent global para todas as sessões
-  const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
-
-  session.defaultSession.setUserAgent(userAgent);
+  session.defaultSession.setUserAgent(DEFAULT_USER_AGENT);
 
   // Configurar sessão persistente para sites externos
   const webSession = session.fromPartition('persist:web-content');
-  webSession.setUserAgent(userAgent);
+  webSession.setUserAgent(DEFAULT_USER_AGENT);
 
   // Configurar permissões para ambas as sessões
   const allowedPermissions = [
@@ -668,35 +701,58 @@ app.whenReady().then(async () => {
     'clipboard-sanitized-write'
   ];
 
-  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
     callback(allowedPermissions.includes(permission));
   });
 
-  webSession.setPermissionRequestHandler((webContents, permission, callback) => {
+  webSession.setPermissionRequestHandler((_webContents, permission, callback) => {
     callback(allowedPermissions.includes(permission));
   });
 
   // --- Gerenciamento de Downloads ---
-  webSession.on('will-download', (event, item, webContents) => {
-    console.log('[Download] Iniciando download:', item.getFilename());
+  webSession.on('will-download', (_event, item) => {
+    const id = uuidv4(); // ✅ Gerar ID único para o download
+    const filename = item.getFilename();
+    const totalBytes = item.getTotalBytes();
+    const savePath = item.getSavePath();
+    
+    console.log('[Download] Iniciando download:', filename, 'ID:', id);
+    
+    // ✅ Salvar no banco de dados
+    try {
+      addDownload(id, filename, savePath, totalBytes);
+    } catch (error) {
+      console.error('[Download] Falha ao salvar no DB:', error);
+    }
     
     // Enviar evento de download iniciado
     const mainWindow = BrowserWindow.getAllWindows()[0];
     if (mainWindow) {
       mainWindow.webContents.send('download-started', {
-        filename: item.getFilename(),
-        savePath: item.getSavePath(),
-        totalBytes: item.getTotalBytes()
+        id,
+        filename,
+        savePath,
+        totalBytes
       });
     }
 
     // Atualizar progresso
-    item.on('updated', (event, state) => {
+    item.on('updated', (_event, state) => {
       if (state === 'progressing') {
+        const receivedBytes = item.getReceivedBytes();
+        
+        // ✅ Atualizar no banco de dados
+        try {
+          updateDownloadProgress(id, receivedBytes);
+        } catch (error) {
+          console.error('[Download] Falha ao atualizar progresso no DB:', error);
+        }
+        
         if (mainWindow) {
           mainWindow.webContents.send('download-progress', {
+            id,
             savePath: item.getSavePath(),
-            receivedBytes: item.getReceivedBytes(),
+            receivedBytes,
             totalBytes: item.getTotalBytes()
           });
         }
@@ -704,12 +760,24 @@ app.whenReady().then(async () => {
     });
 
     // Download concluído
-    item.once('done', (event, state) => {
-      console.log('[Download] Concluído:', item.getFilename(), 'Estado:', state);
+    item.once('done', (_event, state) => {
+      const finalPath = item.getSavePath();
+      const finalState = state === 'completed' ? 'completed' : 'failed';
+      
+      console.log('[Download] Concluído:', filename, 'Estado:', finalState, 'ID:', id);
+      
+      // ✅ Atualizar estado final no banco de dados
+      try {
+        updateDownloadState(id, finalState, finalPath);
+      } catch (error) {
+        console.error('[Download] Falha ao finalizar no DB:', error);
+      }
+      
       if (mainWindow) {
         mainWindow.webContents.send('download-complete', {
-          savePath: item.getSavePath(),
-          state: state === 'completed' ? 'completed' : 'failed'
+          id,
+          savePath: finalPath,
+          state: finalState
         });
       }
     });
@@ -882,18 +950,18 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle('tab:switch', (_e, id: string) => {
-    // Validate input parameter
-    if (typeof id !== 'string' || !id.trim()) {
-      console.error('ID de aba inválido fornecido para tab:switch');
+    // ✅ Validação robusta
+    if (!isValidTabId(id)) {
+      console.error('tab:switch foi chamado com ID inválido:', id);
       return;
     }
     return switchToTab(id);
   });
 
   ipcMain.handle('tab:close', (_e, id: string) => {
-    // Validate input parameter
-    if (typeof id !== 'string' || !id.trim()) {
-      console.error('ID de aba inválido fornecido para tab:close');
+    // ✅ Validação robusta
+    if (!isValidTabId(id)) {
+      console.error('tab:close foi chamado com ID inválido:', id);
       return;
     }
     return closeTab(id);
@@ -1106,11 +1174,42 @@ app.whenReady().then(async () => {
     }
   });
 
+  // Downloads handlers
+  ipcMain.handle('downloads:get', () => {
+    try {
+      return getDownloads();
+    } catch (error: unknown) {
+      console.error('Erro ao buscar downloads:', error);
+      return [];
+    }
+  });
+
+  ipcMain.handle('downloads:clear-completed', () => {
+    try {
+      clearCompletedDownloads();
+    } catch (error: unknown) {
+      console.error('Erro ao limpar downloads:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('downloads:remove', (_e, id: string) => {
+    try {
+      if (typeof id !== 'string' || !id) {
+        throw new Error('ID de download inválido');
+      }
+      return removeDownload(id);
+    } catch (error: unknown) {
+      console.error('Erro ao remover download:', error);
+      return false;
+    }
+  });
+
   // Settings handlers
   ipcMain.handle('settings:get', async (_e, key: string): Promise<string | null> => {
     try {
-      // Validate input parameter
-      if (typeof key !== 'string' || !key.trim()) {
+      // ✅ Validação robusta
+      if (!isValidSettingKey(key)) {
         throw new Error('Chave de configuração inválida');
       }
 
@@ -1123,8 +1222,8 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('settings:set', async (_e, key: string, value: string): Promise<boolean> => {
     try {
-      // Validate input parameters
-      if (typeof key !== 'string' || !key.trim()) {
+      // ✅ Validação robusta
+      if (!isValidSettingKey(key)) {
         throw new Error('Chave de configuração inválida');
       }
       if (typeof value !== 'string') {
@@ -1174,9 +1273,9 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('bookmark:remove', async (_e, id: string): Promise<boolean> => {
     try {
-      // Validate input parameter
-      if (typeof id !== 'string' || !id.trim()) {
-        throw new Error('ID inválido');
+      // ✅ Validação robusta
+      if (!isValidBookmarkId(id)) {
+        throw new Error('ID de bookmark inválido');
       }
 
       removeBookmark(id);
@@ -1330,7 +1429,7 @@ app.whenReady().then(async () => {
   }
 
   // Função auxiliar para lidar com downloads (usada em ambas as sessões)
-  const handleDownload = (event: Electron.Event, item: Electron.DownloadItem, webContents: Electron.WebContents) => {
+  const handleDownload = (_event: Electron.Event, item: Electron.DownloadItem) => {
     const id = uuidv4();
     const filename = item.getFilename();
     const totalBytes = item.getTotalBytes();
@@ -1348,7 +1447,7 @@ app.whenReady().then(async () => {
       }
     });
 
-    item.on('updated', (event, state) => {
+    item.on('updated', (_event, state) => {
       if (state === 'progressing') {
         const receivedBytes = item.getReceivedBytes();
         
@@ -1366,7 +1465,7 @@ app.whenReady().then(async () => {
       }
     });
 
-    item.on('done', (event, state) => {
+    item.on('done', (_event, state) => {
       const path = item.getSavePath();
       
       // Envia para mainWindow
@@ -1393,31 +1492,31 @@ app.whenReady().then(async () => {
 });
 
 // Função para salvar estado das abas
-const saveTabsState = async () => {
-  try {
-    const tabsArray: TabState[] = [];
-    let position = 0;
+// const saveTabsState = async () => {
+//   try {
+//     const tabsArray: TabState[] = [];
+//     let position = 0;
 
-    // Percorre todas as abas em ordem
-    for (const [id, view] of tabs.entries()) {
-      const info = tabInfo.get(id);
-      if (info) {
-        tabsArray.push({
-          id,
-          url: info.url,
-          title: info.title,
-          favicon: info.favicon,
-          position: position++,
-          active: id === activeTabId,
-        });
-      }
-    }
+//     // Percorre todas as abas em ordem
+//     for (const [id, _view] of tabs.entries()) {
+//       const info = tabInfo.get(id);
+//       if (info) {
+//         tabsArray.push({
+//           id,
+//           url: info.url,
+//           title: info.title,
+//           favicon: info.favicon,
+//           position: position++,
+//           active: id === activeTabId,
+//         });
+//       }
+//     }
 
-    saveTabsToDatabase(tabsArray);
-  } catch (error: unknown) {
-    console.error('Erro ao salvar estado das abas:', error);
-  }
-};
+//     saveTabsToDatabase(tabsArray);
+//   } catch (error: unknown) {
+//     console.error('Erro ao salvar estado das abas:', error);
+//   }
+// };
 
 app.on('will-quit', () => {
   saveTabsToDatabase(Array.from(tabs.keys()).map((id, index) => {

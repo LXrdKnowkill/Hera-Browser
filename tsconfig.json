@@ -5,18 +5,18 @@
     "module": "commonjs",
     "skipLibCheck": true,
     "esModuleInterop": true,
-    "noImplicitAny": false,
+    "noImplicitAny": true, //não mexer, não altere para false
     "sourceMap": true,
     "baseUrl": ".",
     "outDir": "dist",
     "moduleResolution": "node",
     "resolveJsonModule": true,
-    "strict": false,
+    "strict": true, //não mexer, não altere para false
     "strictNullChecks": false,
     "strictFunctionTypes": false,
     "strictBindCallApply": false,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
+    "noUnusedLocals": true, //  ATIVADO
+    "noUnusedParameters": true, //  ATIVADO
     "paths": {
       "*": ["node_modules/*"],
       "@types/*": ["./src/types/*"]

@@ -7,7 +7,6 @@ import type {
   HeraAPI,
   Bookmark,
   HistoryEntry,
-  TabInfo,
   TabUpdateInfo
 } from './types';
 
@@ -405,58 +404,58 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Função para obter URL de busca baseada na configuração
   // ========================================// OMNIBOX INTELIGENTE (v2.0.0)// ========================================
-  const omniboxSuggestions: Array<{ type: 'history' | 'bookmark' | 'search'; title: string; url: string; favicon?: string }> = [];
-  let selectedSuggestionIndex = -1;
+  // const omniboxSuggestions: Array<{ type: 'history' | 'bookmark' | 'search'; title: string; url: string; favicon?: string }> = [];
+  // let selectedSuggestionIndex = -1;
 
   // Função para buscar sugestões baseadas no texto digitado
-  const getOmniboxSuggestions = async (query: string): Promise<Array<{ type: 'history' | 'bookmark' | 'search'; title: string; url: string; favicon?: string }>> => {
-    const suggestions: Array<{ type: 'history' | 'bookmark' | 'search'; title: string; url: string; favicon?: string }> = [];
+  // const getOmniboxSuggestions = async (query: string): Promise<Array<{ type: 'history' | 'bookmark' | 'search'; title: string; url: string; favicon?: string }>> => {
+  //   const suggestions: Array<{ type: 'history' | 'bookmark' | 'search'; title: string; url: string; favicon?: string }> = [];
     
-    if (!query || query.length < 2) return suggestions;
-
-    try {
+    // if (!query || query.length < 2) return suggestions;
+// 
+    // try {
       // Buscar no histórico
-      const historyRaw = await window.heraAPI.getHistory();
-      const history = validateHistoryEntries(historyRaw);
-      const historyMatches = history
-        .filter((item: HistoryEntry) => 
-          item.title.toLowerCase().includes(query.toLowerCase()) || 
-          item.url.toLowerCase().includes(query.toLowerCase())
-        )
-        .slice(0, 5)
-        .map((item: HistoryEntry) => ({
-          type: 'history' as const,
-          title: item.title,
-          url: item.url,
-          favicon: undefined
-        }));
-      
-      suggestions.push(...historyMatches);
-
+      // const historyRaw = await window.heraAPI.getHistory();
+      // const history = validateHistoryEntries(historyRaw);
+      // const historyMatches = history
+        // .filter((item: HistoryEntry) => 
+          // item.title.toLowerCase().includes(query.toLowerCase()) || 
+          // item.url.toLowerCase().includes(query.toLowerCase())
+        // )
+        // .slice(0, 5)
+        // .map((item: HistoryEntry) => ({
+          // type: 'history' as const,
+          // title: item.title,
+          // url: item.url,
+          // favicon: undefined
+        // }));
+      // 
+      // suggestions.push(...historyMatches);
+// 
       // Buscar nos favoritos
-      const bookmarksRaw = await window.heraAPI.searchBookmarks(query);
-      const bookmarks = validateBookmarks(bookmarksRaw);
-      const bookmarkMatches = bookmarks
-        .slice(0, 3)
-        .map((bookmark: Bookmark) => ({
-          type: 'bookmark' as const,
-          title: bookmark.title,
-          url: bookmark.url || '',
-          favicon: bookmark.favicon
-        }));
-      
-      suggestions.push(...bookmarkMatches);
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        console.error('Erro ao buscar sugestões:', error.message);
-      } else {
-        console.error('Erro ao buscar sugestões:', error);
-      }
-    }
-
-    return suggestions.slice(0, 8); // Máximo 8 sugestões
-  };
-
+      // const bookmarksRaw = await window.heraAPI.searchBookmarks(query);
+      // const bookmarks = validateBookmarks(bookmarksRaw);
+      // const bookmarkMatches = bookmarks
+        // .slice(0, 3)
+        // .map((bookmark: Bookmark) => ({
+          // type: 'bookmark' as const,
+          // title: bookmark.title,
+          // url: bookmark.url || '',
+          // favicon: bookmark.favicon
+        // }));
+      // 
+      // suggestions.push(...bookmarkMatches);
+    // } catch (error: unknown) {
+      // if (error instanceof Error) {
+        // console.error('Erro ao buscar sugestões:', error.message);
+      // } else {
+        // console.error('Erro ao buscar sugestões:', error);
+      // }
+    // }
+// 
+    // return suggestions.slice(0, 8); // Máximo 8 sugestões
+  // };
+// 
   const getSearchUrl = async (query: string): Promise<string> => {
     try {
       const searchEngine = await window.heraAPI.getSetting('searchEngine') || 'google';
@@ -787,21 +786,23 @@ window.addEventListener('DOMContentLoaded', () => {
             showFindBar();
           }
           break;
-        case 'b':
+        case 'b': {
           e.preventDefault();
           // Mostrar/ocultar barra de favoritos
           favoritesBarWrapper.classList.toggle('hidden');
           const isHidden = favoritesBarWrapper.classList.contains('hidden');
           window.heraAPI.send('favorites-bar-visibility', isHidden);
           break;
+        }
         // Ctrl+1-9: Navegar para aba específica
-        case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
+        case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9': {
           e.preventDefault();
           const tabIndex = parseInt(e.key) - 1;
           if (tabIndex < tabsOrder.length) {
             window.heraAPI.switchToTab(tabsOrder[tabIndex]);
           }
           break;
+        }
       }
       
       // Ctrl+Tab / Ctrl+Shift+Tab: Alternar abas
@@ -860,10 +861,8 @@ window.addEventListener('DOMContentLoaded', () => {
   // Omnibox agora é um BrowserView separado - não precisa mais de renderSuggestions aqui
 
   // Omnibox temporariamente desabilitado
-  let suggestionTimeout: NodeJS.Timeout;
-  urlInput.addEventListener('input', async (e) => {
-    const query = (e.target as HTMLInputElement).value.trim();
-    clearTimeout(suggestionTimeout);
+  urlInput.addEventListener('input', async () => {
+    // const query = (e.target as HTMLInputElement).value.trim();
     // TODO: Re-implementar omnibox
   });
 
@@ -876,8 +875,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     
     if (e.key === 'Escape') {
-      selectedSuggestionIndex = -1;
-      urlInput.blur();
+      // selectedSuggestionIndex = -1;
       return;
     }
   });
@@ -1148,7 +1146,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const formattedSize = totalBytes > 0 ? `${(totalBytes / 1024 / 1024).toFixed(2)} MB` : '';
     
     // Detectar tipo de arquivo
-    const extension = filename.split('.').pop()?.toLowerCase() || '';
+    // const extension = filename.split('.').pop()?.toLowerCase() || '';
     const fileIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>';
     
     item.innerHTML = `
@@ -1217,7 +1215,7 @@ window.addEventListener('DOMContentLoaded', () => {
       if (statusSpan) {
         statusSpan.className = 'download-item-status';
         switch (data.state) {
-          case 'completed':
+          case 'completed': {
             statusSpan.classList.add('completed');
             statusSpan.textContent = 'Concluído';
             
@@ -1253,14 +1251,17 @@ window.addEventListener('DOMContentLoaded', () => {
             actionsDiv.querySelector('button:first-child')?.addEventListener('click', () => window.heraAPI.openFile(data.path));
             actionsDiv.querySelector('button:last-child')?.addEventListener('click', () => window.heraAPI.showItemInFolder(data.path));
             break;
-          case 'cancelled':
+          }
+          case 'cancelled': {
             statusSpan.classList.add('cancelled');
             statusSpan.textContent = 'Cancelado';
             break;
-          case 'interrupted':
+          }
+          case 'interrupted': {
             statusSpan.classList.add('interrupted');
             statusSpan.textContent = 'Interrompido';
             break;
+          }
         }
       }
       

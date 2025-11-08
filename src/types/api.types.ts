@@ -419,6 +419,28 @@ export interface HeraAPI {
   showDownloadInFolder: (filePath: string) => Promise<void>;
   
   /**
+   * Obtém todos os downloads do banco de dados
+   * 
+   * @returns Promise com array de downloads
+   */
+  getDownloads: () => Promise<unknown[]>;
+  
+  /**
+   * Remove downloads concluídos do banco de dados
+   * 
+   * @returns Promise que resolve quando os downloads são removidos
+   */
+  clearCompletedDownloads: () => Promise<void>;
+  
+  /**
+   * Remove um download específico do banco de dados
+   * 
+   * @param id - ID do download a ser removido
+   * @returns Promise com boolean indicando sucesso
+   */
+  removeDownload: (id: string) => Promise<boolean>;
+  
+  /**
    * Abre a pasta de downloads padrão do sistema
    * 
    * @returns Promise que resolve quando a pasta é aberta
